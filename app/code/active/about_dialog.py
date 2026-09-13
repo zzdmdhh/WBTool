@@ -34,9 +34,10 @@ from PySide6.QtWidgets import (
 )
 
 # ============ 文件路径 ============
-PROJECT_ROOT = os.path.dirname(os.path.abspath(__file__))
-# Logo 图片路径：将 logo.png 放入项目根目录的 assets/ 文件夹即可自动显示
-LOGO_PATH = os.path.join(PROJECT_ROOT, "assets", "logo.png")
+# 文件位于 app/code/active/ 下，上溯三级得到 app/ 根目录
+APP_ROOT = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+# Logo 图片路径：将 logo.png 放入 app/assets/ 文件夹即可自动显示
+LOGO_PATH = os.path.join(APP_ROOT, "assets", "logo.png")
 
 # ============ 蓝白配色 ============
 COLOR_PRIMARY = "#2F6BFF"        # 主蓝色
@@ -49,10 +50,10 @@ COLOR_TEXT_GRAY = "#7A8699"      # 次要文字灰色
 
 # ============ 应用信息 ============
 APP_NAME = "WBTool"
-APP_STAGE = "Alpha"            # 发布阶段：Alpha / Beta / Release
-APP_VERSION = "1.0.0.100"      # 版本号
+APP_STAGE = "Release"            # 发布阶段：Alpha / Beta / Release
+APP_VERSION = "1.0.0"          # 版本号（发行版）
 APP_DESC = "多功能智慧大屏管理系统"
-# 开源仓库地址（待补充）：填入后，关于界面自动将其显示为可点击的链接
+# 开源仓库地址（留空则不显示仓库链接行）：填入后，关于界面自动将其显示为可点击的链接
 APP_REPO_URL = ""
 # 更新检查接口地址（待配置）：返回 JSON，格式 {"version": "x.y.z", "url": "下载地址", "notes": "更新说明"}
 # 留空时，点击“检查更新”会提示尚未配置
@@ -181,17 +182,16 @@ class AboutDialog(QDialog):
         license_title.setStyleSheet(
             f"color: {COLOR_TEXT_DARK}; font-size: 15px; font-weight: bold;"
         )
-        license_text = QLabel(
-            "本项目基于 GPL-3.0 许可证开源发布，遵循自由软件精神："
-            "可自由使用、复制、修改与分发；"
-            "修改后的衍生作品需以相同许可证开源。"
-        )
+        license_text = QLabel("本项目基于 GPL 3 许可证开源")
         license_text.setWordWrap(True)
         license_text.setStyleSheet(
             f"color: {COLOR_TEXT_DARK}; font-size: 13px;"
         )
 
-        # 开源仓库链接（地址待补充时显示占位文字）
+        layout.addWidget(license_title)
+        layout.addWidget(license_text)
+
+        # 开源仓库链接（地址留空时不显示该行）
         if APP_REPO_URL:
             repo = QLabel(
                 f'<a href="{APP_REPO_URL}" '
@@ -200,15 +200,8 @@ class AboutDialog(QDialog):
             )
             repo.setOpenExternalLinks(True)
             repo.setCursor(Qt.PointingHandCursor)
-        else:
-            repo = QLabel("开源仓库地址：待补充")
-            repo.setStyleSheet(
-                f"color: {COLOR_TEXT_GRAY}; font-size: 13px;"
-            )
+            layout.addWidget(repo)
 
-        layout.addWidget(license_title)
-        layout.addWidget(license_text)
-        layout.addWidget(repo)
         layout.addStretch(1)
 
         # 底部按钮：检查更新（主按钮）+ 关闭
@@ -217,6 +210,7 @@ class AboutDialog(QDialog):
         self._btn_update = QPushButton("检查更新")
         self._btn_update.setObjectName("primary")
         self._btn_update.setCursor(Qt.PointingHandCursor)
+        self._btn_update.setEnabled(False)  # 检查更新功能暂不可用
         self._btn_update.clicked.connect(self.check_update)
         btn_close = QPushButton("关闭")
         btn_close.setCursor(Qt.PointingHandCursor)
@@ -274,6 +268,11 @@ class AboutDialog(QDialog):
         }}
         QPushButton#primary:pressed {{
             background: {COLOR_PRIMARY_DARK};
+        }}
+        QPushButton#primary:disabled {{
+            background: #D9DEE7;
+            border: none;
+            color: #FFFFFF;
         }}
         """
 

@@ -3,9 +3,9 @@
 悬浮球组件
 应用的核心入口之一，启动时由 main.py 创建。支持：
 - 左键拖动移动，松手后靠近屏幕边缘自动吸附
-- 单击弹出功能选择条（白板 / 屏幕批注 / 关闭）
+- 单击弹出功能选择条（白板 / 关闭）
 - 长按进入关于界面
-同时负责管理白板、屏幕批注、关于界面的创建与显示。
+同时负责管理白板、关于界面的创建与显示。
 本文件自包含运行所需的全部常量与工具函数。
 """
 
@@ -30,14 +30,14 @@ from PySide6.QtWidgets import (
     QWidget,
 )
 
-from about_dialog import AboutDialog
-from screen_markup import ScreenMarkup
-from whiteboard import Whiteboard
+from app.code.active.about_dialog import AboutDialog
+from app.code.active.whiteboard import Whiteboard
 
 # ============ 文件路径 ============
-PROJECT_ROOT = os.path.dirname(os.path.abspath(__file__))
-# Logo 图片路径：将 logo.png 放入项目根目录的 assets/ 文件夹即可自动显示
-LOGO_PATH = os.path.join(PROJECT_ROOT, "assets", "logo.png")
+# 文件位于 app/code/active/ 下，上溯三级得到 app/ 根目录
+APP_ROOT = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+# Logo 图片路径：将 logo.png 放入 app/assets/ 文件夹即可自动显示
+LOGO_PATH = os.path.join(APP_ROOT, "assets", "logo.png")
 
 # ============ 蓝白配色 ============
 COLOR_PRIMARY = "#2F6BFF"        # 主蓝色
@@ -77,7 +77,7 @@ def available_screen_geometry(widget=None):
 
 
 class FunctionBar(QFrame):
-    """悬浮球的功能选择条：白板 / 屏幕批注 / 关闭，横向排列。"""
+    """悬浮球的功能选择条：白板 / 关闭，横向排列。"""
 
     def __init__(self, owner, parent=None):
         super().__init__(parent)
@@ -91,7 +91,7 @@ class FunctionBar(QFrame):
 
         # 固定完整尺寸：确保首次弹出时读取的宽高准确，定位不偏移
         self.setFixedSize(
-            BAR_BUTTON_WIDTH * 3 + BAR_PADDING * 2 + 2,
+            BAR_BUTTON_WIDTH * 2 + BAR_PADDING * 2 + 2,
             BAR_BUTTON_HEIGHT + BAR_PADDING * 2,
         )
 
@@ -113,15 +113,10 @@ class FunctionBar(QFrame):
         self.btn_board = self._create_button("白板")
         self.btn_board.clicked.connect(self.owner.open_whiteboard)
 
-        self.btn_markup = self._create_button("屏幕批注")
-        self.btn_markup.clicked.connect(self.owner.open_markup)
-
         self.btn_quit = self._create_button("关闭", quit_style=True)
         self.btn_quit.clicked.connect(self.owner.quit)
 
         layout.addWidget(self.btn_board)
-        layout.addWidget(self._divider())
-        layout.addWidget(self.btn_markup)
         layout.addWidget(self._divider())
         layout.addWidget(self.btn_quit)
 
@@ -214,7 +209,6 @@ class FloatingBall(QWidget):
 
         # 由悬浮球管理的功能窗口实例
         self.whiteboard = None    # 白板实例
-        self.markup = None        # 屏幕批注实例
 
         # 窗口属性：无边框、始终置顶、工具窗（不占用任务栏）
         self.setWindowFlags(
@@ -362,13 +356,6 @@ class FloatingBall(QWidget):
             self.whiteboard = Whiteboard()
         if not self.whiteboard.isVisible():
             self.whiteboard.show()
-
-    def open_markup(self):
-        """打开屏幕批注（已存在则复用）。"""
-        if self.markup is None:
-            self.markup = ScreenMarkup()
-        if not self.markup.isVisible():
-            self.markup.show()
 
     def open_about(self):
         """打开关于界面（模态对话框）。"""

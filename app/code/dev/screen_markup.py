@@ -18,7 +18,7 @@ from PySide6.QtWidgets import (
     QVBoxLayout,
 )
 
-from whiteboard import BOARD_COLORS, StrokeCanvas
+from app.code.active.whiteboard import BOARD_COLORS, StrokeCanvas
 
 # 蓝白配色
 COLOR_PRIMARY = "#2F6BFF"        # 主蓝色

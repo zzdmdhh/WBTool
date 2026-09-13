@@ -1,0 +1,59 @@
+# WBTool 发行版打包工作流
+# 触发方式：在 GitHub Actions 页面手动点击 "Run workflow" 按钮，并填写版本号
+name: Build Release
+
+on:
+  workflow_dispatch:
+    inputs:
+      version:
+        description: '版本号，例如 1.0.1（发布后自动生成 tag v1.0.1）'
+        required: true
+        type: string
+
+# 允许工作流创建 GitHub Release 并上传附件
+permissions:
+  contents: write
+
+jobs:
+  build-windows:
+    name: Build Windows executable
+    runs-on: windows-latest
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up Python 3.11
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      - name: Install dependencies
+        run: |
+          pip install -r requirements.txt pyinstaller
+
+      - name: Build single-file executable
+        # --onefile  : 打包成单个 exe
+        # --windowed : GUI 程序，不弹出控制台黑窗
+        # --add-data : 把资源/配置目录一并打入（app/config 被 .gitignore 忽略，
+        #              检出时可能不存在，故先判断再添加）
+        run: |
+          $dataArgs = @()
+          if (Test-Path "app/assets") { $dataArgs += "--add-data", "app/assets;app/assets" }
+          if (Test-Path "app/config") { $dataArgs += "--add-data", "app/config;app/config" }
+          & pyinstaller --noconfirm --onefile --windowed --name WBTool @dataArgs main.py
+
+      - name: Verify artifact
+        run: |
+          $exe = Get-Item "dist\WBTool.exe"
+          if ($null -eq $exe -or $exe.Length -lt 1MB) {
+            throw "WBTool.exe 缺失或体积异常（小于 1MB），打包可能失败"
+          }
+          Write-Host "OK - WBTool.exe size: $($exe.Length) bytes"
+
+      - name: Create GitHub Release and upload
+        uses: softprops/action-gh-release@v2
+        with:
+          files: dist/WBTool.exe
+          # 发行版必须挂在 tag 上：用填写的版本号自动生成 tag（如 v1.0.1）
+          tag_name: v${{ inputs.version }}

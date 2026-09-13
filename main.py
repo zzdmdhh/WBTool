@@ -1,7 +1,7 @@
 # -*- coding: utf-8 -*-
 """
 WBTool 智慧大屏辅助系统 - 主程序
-负责创建并运行三个核心组件：悬浮球、课程表、信息显示。
+负责创建并运行悬浮球（悬浮球菜单内含白板、关于界面）。
 运行方式：python main.py
 """
 
@@ -10,13 +10,11 @@ import sys
 from PySide6.QtCore import Qt
 from PySide6.QtWidgets import QApplication
 
-from floating_ball import FloatingBall
-from info_panel import InfoPanel
-from schedule_widget import ScheduleWidget
+from app.code.active.floating_ball import FloatingBall
 
 # 应用名称与版本号
 APP_NAME = "WBTool"
-APP_VERSION = "1.0.0.100"
+APP_VERSION = "1.0.0"
 
 
 def main():
@@ -31,14 +29,9 @@ def main():
     # 关闭所有窗口时不自动退出，由悬浮球菜单的“关闭”按钮显式退出
     app.setQuitOnLastWindowClosed(False)
 
-    # 运行三个核心组件：悬浮球、课程表、信息显示
+    # 运行悬浮球：功能选择条可打开白板，长按进入关于界面
     ball = FloatingBall()
-    schedule = ScheduleWidget()
-    info_panel = InfoPanel()
-
     ball.show()
-    schedule.show()
-    info_panel.show()
 
     sys.exit(app.exec())
 

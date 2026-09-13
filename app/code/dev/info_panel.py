@@ -14,8 +14,9 @@ from PySide6.QtGui import QGuiApplication
 from PySide6.QtWidgets import QFrame, QHBoxLayout, QLabel, QVBoxLayout, QWidget
 
 # ============ 文件路径 ============
-PROJECT_ROOT = os.path.dirname(os.path.abspath(__file__))
-INFO_JSON_PATH = os.path.join(PROJECT_ROOT, "config", "info.json")
+# 文件位于 app/code/dev/ 下，上溯三级得到 app/ 根目录
+APP_ROOT = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+INFO_JSON_PATH = os.path.join(APP_ROOT, "config", "info.json")
 
 # ============ 蓝白配色 ============
 COLOR_PRIMARY = "#2F6BFF"        # 主蓝色
