@@ -18,7 +18,7 @@ from PySide6.QtWidgets import (
 )
 
 from utils import common
-from utils.common import StrokeCanvas
+from ui.whiteboard import BOARD_COLORS, StrokeCanvas
 
 
 class MarkupToolbar(QFrame):
@@ -65,7 +65,7 @@ class MarkupToolbar(QFrame):
 
         # 颜色选择按钮组
         self.color_buttons = []
-        for color in common.BOARD_COLORS:
+        for color in BOARD_COLORS:
             btn = QPushButton()
             btn.setFixedSize(20, 20)
             btn.setCursor(Qt.PointingHandCursor)
@@ -184,7 +184,7 @@ class MarkupToolbar(QFrame):
 
     def refresh_color_ui(self):
         """刷新颜色按钮选中状态。"""
-        for btn, color in zip(self.color_buttons, common.BOARD_COLORS):
+        for btn, color in zip(self.color_buttons, BOARD_COLORS):
             border = (
                 common.COLOR_PRIMARY if color == self.owner.color else common.COLOR_WHITE
             )
@@ -218,7 +218,7 @@ class ScreenMarkup(StrokeCanvas):
         self.setFocusPolicy(Qt.ClickFocus)
         self.setCursor(Qt.CrossCursor)
         # 批注默认使用醒目的红色、更粗的笔触
-        self.color = common.BOARD_COLORS[1]
+        self.color = BOARD_COLORS[1]
         self.width = 6
         self.setGeometry(QGuiApplication.primaryScreen().geometry())
 
