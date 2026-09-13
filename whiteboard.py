@@ -1,7 +1,7 @@
 # -*- coding: utf-8 -*-
 """
 白板组件
-自包含实现全部白板功能，可独立运行（python ui/whiteboard.py），
+自包含实现全部白板功能，可独立运行（python whiteboard.py），
 也可由悬浮球菜单的"白板"按钮打开。
 
 包含：
@@ -12,11 +12,6 @@
 
 import os
 import sys
-
-# 将项目根目录加入模块搜索路径，保证直接运行本文件时能导入项目内模块
-PROJECT_ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-if PROJECT_ROOT not in sys.path:
-    sys.path.insert(0, PROJECT_ROOT)
 
 from PySide6.QtCore import (
     QDateTime,
@@ -37,7 +32,6 @@ from PySide6.QtGui import (
 from PySide6.QtWidgets import (
     QFileDialog,
     QFrame,
-    QGraphicsOpacityEffect,
     QHBoxLayout,
     QLabel,
     QMessageBox,
@@ -46,11 +40,15 @@ from PySide6.QtWidgets import (
     QWidget,
 )
 
-from utils import common
-
 # ============ 画笔色板 ============
 # 白板与屏幕批注共用的画笔颜色列表（黑、红、蓝）
 BOARD_COLORS = ["#1F2937", "#E53935", "#2F6BFF"]
+
+# 蓝白配色
+COLOR_PRIMARY = "#2F6BFF"        # 主蓝色
+COLOR_LIGHT_BLUE = "#EAF1FF"     # 浅蓝背景（悬停/选中底）
+COLOR_BORDER = "#C9DAFF"         # 浅蓝边框
+COLOR_WHITE = "#FFFFFF"          # 白色
 
 # 白板内文字统一使用的纯黑颜色
 TEXT_COLOR_BLACK = "#000000"
@@ -58,6 +56,24 @@ TEXT_COLOR_BLACK = "#000000"
 # 画笔与橡皮的固定笔触宽度：橡皮比画笔更粗
 PEN_WIDTH = 4
 ERASER_WIDTH = 20
+
+
+def weekday_name(date=None):
+    """
+    返回日期对应的中文星期名（周一~周日）。
+
+    参数:
+        date: QDate 对象，缺省时使用当天
+
+    返回:
+        字符串，如 "周一"
+    """
+    from PySide6.QtCore import QDate
+
+    if date is None:
+        date = QDate.currentDate()
+    names = ["周一", "周二", "周三", "周四", "周五", "周六", "周日"]
+    return names[date.dayOfWeek() - 1]
 
 
 # ============ 画布基类 ============
@@ -238,7 +254,7 @@ class Whiteboard(StrokeCanvas):
 
     def __init__(self, parent=None):
         # 以不透明白色为背景创建画布
-        super().__init__(background=common.COLOR_WHITE, parent=parent)
+        super().__init__(background=COLOR_WHITE, parent=parent)
         self.setCursor(Qt.CrossCursor)  # 十字光标，便于精准书写
         # 全屏显示（覆盖整个屏幕，包括任务栏区域）
         self.setGeometry(QGuiApplication.primaryScreen().geometry())
@@ -272,6 +288,9 @@ class Whiteboard(StrokeCanvas):
         self.pages = new_pages
         # canvas 必须与当前页保持同一对象引用，后续绘制才能写进对应页面
         self.canvas = self.pages[self.current_page_index]
+        # 同步右下角页导航的位置
+        if hasattr(self, "page_nav"):
+            self._reposition_page_nav()
 
     # ---------- UI 构建 ----------
 
@@ -304,6 +323,9 @@ class Whiteboard(StrokeCanvas):
         self.toolbar = self._build_toolbar()
         root.addWidget(self.toolbar, 0, Qt.AlignHCenter)
 
+        # 右下角独立页导航面板（上一页 / 页码 / 下一页）
+        self._build_page_nav()
+
         # 时间刷新定时器：每秒更新一次日期与时间文本
         self._time_timer = QTimer(self)
         self._time_timer.setInterval(1000)
@@ -313,10 +335,9 @@ class Whiteboard(StrokeCanvas):
 
     def _build_toolbar(self):
         """
-        构建底部工具栏，分三个区域：
-        - 左区：保存、最小化、时间开关、关闭
+        构建底部控制工具栏，分两个区域：
+        - 左区：保存、清空、最小化、时间开关、关闭
         - 中区：画笔、颜色区、橡皮（书写工具）
-        - 右区：添加页、上一页、页码、下一页
         """
         bar = QFrame()
         bar.setObjectName("toolbar")
@@ -389,48 +410,88 @@ class Whiteboard(StrokeCanvas):
             )
             self.color_buttons.append(btn)
             color_layout.addWidget(btn)
-        # 颜色区展开动画：透明度 0 → 1 淡入
-        self._color_effect = QGraphicsOpacityEffect(self.color_panel)
-        self.color_panel.setGraphicsEffect(self._color_effect)
-        self._color_anim = QPropertyAnimation(self._color_effect, b"opacity", self)
+        # 颜色区展开动画：容器宽度从 0 平滑展开到内容宽度
+        self._color_anim = QPropertyAnimation(self.color_panel, b"maximumWidth", self)
         self._color_anim.setDuration(180)
-        self._color_anim.setStartValue(0.0)
-        self._color_anim.setEndValue(1.0)
 
         layout.addWidget(self.btn_pen)
         layout.addWidget(self.color_panel)
         layout.addWidget(self.btn_eraser)
-        layout.addWidget(self._divider())
-
-        # ---------- 右区：页管理 ----------
-        # 添加页：新建一张空白页并切换到新页
-        self.btn_add_page = QPushButton("添加页")
-        self.btn_add_page.setCursor(Qt.PointingHandCursor)
-        self.btn_add_page.clicked.connect(self._add_page)
-
-        # 上一页 / 下一页：在已有页面间切换
-        self.btn_prev = QPushButton("◀")
-        self.btn_prev.setCursor(Qt.PointingHandCursor)
-        self.btn_prev.clicked.connect(self._prev_page)
-
-        # 页码：显示当前页位置，如 1/3
-        self.page_label = QLabel("1/1")
-        self.page_label.setStyleSheet(
-            f"color: {TEXT_COLOR_BLACK}; font-size: 13px;"
-        )
-
-        self.btn_next = QPushButton("▶")
-        self.btn_next.setCursor(Qt.PointingHandCursor)
-        self.btn_next.clicked.connect(self._next_page)
-
-        layout.addWidget(self.btn_add_page)
-        layout.addWidget(self.btn_prev)
-        layout.addWidget(self.page_label)
-        layout.addWidget(self.btn_next)
 
         # 按当前状态刷新工具按钮选中样式
         self._update_tool_ui()
         return bar
+
+    def _build_page_nav(self):
+        """构建右下角独立的页导航面板：上一页 / 页码 / 下一页。"""
+        self.page_nav = QFrame(self)
+        self.page_nav.setObjectName("pageNav")
+        self.page_nav.setStyleSheet(self._page_nav_style())
+
+        nav_layout = QHBoxLayout(self.page_nav)
+        nav_layout.setContentsMargins(12, 8, 12, 8)
+        nav_layout.setSpacing(8)
+
+        # 上一页：切换到上一页（首页时无动作）
+        self.btn_prev = QPushButton("◀")
+        self.btn_prev.setFixedSize(44, 44)
+        self.btn_prev.setCursor(Qt.PointingHandCursor)
+        self.btn_prev.clicked.connect(self._prev_page)
+
+        # 页码：以正方形按钮样式显示当前页/总页数，如 1/3
+        self.page_label = QLabel("1/1")
+        self.page_label.setFixedSize(44, 44)
+        self.page_label.setAlignment(Qt.AlignCenter)
+
+        # 下一页：切换到下一页；末页时自动新建一页并翻过去
+        self.btn_next = QPushButton("▶")
+        self.btn_next.setFixedSize(44, 44)
+        self.btn_next.setCursor(Qt.PointingHandCursor)
+        self.btn_next.clicked.connect(self._next_page)
+
+        nav_layout.addWidget(self.btn_prev)
+        nav_layout.addWidget(self.page_label)
+        nav_layout.addWidget(self.btn_next)
+
+        self._reposition_page_nav()
+
+    def _reposition_page_nav(self):
+        """将页导航面板固定到白板右下角（与边缘留出间距）。"""
+        self.page_nav.adjustSize()
+        size = self.size()
+        self.page_nav.move(
+            size.width() - self.page_nav.width() - 36,
+            size.height() - self.page_nav.height() - 36,
+        )
+
+    def _page_nav_style(self):
+        """页导航面板样式：半透明白底蓝边圆角，正方形大按钮。"""
+        return f"""
+        QFrame#pageNav {{
+            background: rgba(255, 255, 255, 235);
+            border: 1px solid {COLOR_BORDER};
+            border-radius: 12px;
+        }}
+        QPushButton {{
+            background: transparent;
+            border: 1px solid {COLOR_BORDER};
+            border-radius: 8px;
+            color: {TEXT_COLOR_BLACK};
+            font-size: 18px;
+            padding: 0;
+        }}
+        QPushButton:hover {{
+            background: {COLOR_LIGHT_BLUE};
+            color: {COLOR_PRIMARY};
+        }}
+        QLabel {{
+            background: transparent;
+            border: 1px solid {COLOR_BORDER};
+            border-radius: 8px;
+            color: {TEXT_COLOR_BLACK};
+            font-size: 14px;
+        }}
+        """
 
     def _divider(self):
         """创建工具栏中使用的竖直分隔线。"""
@@ -444,11 +505,11 @@ class Whiteboard(StrokeCanvas):
         return f"""
         QFrame#toolbar {{
             background: rgba(255, 255, 255, 235);
-            border: 1px solid {common.COLOR_BORDER};
+            border: 1px solid {COLOR_BORDER};
             border-radius: 12px;
         }}
         QFrame#divider {{
-            background: {common.COLOR_BORDER};
+            background: {COLOR_BORDER};
             border: none;
             max-width: 1px;
             min-width: 1px;
@@ -456,20 +517,20 @@ class Whiteboard(StrokeCanvas):
         }}
         QPushButton {{
             background: transparent;
-            border: 1px solid {common.COLOR_BORDER};
+            border: 1px solid {COLOR_BORDER};
             border-radius: 6px;
             color: {TEXT_COLOR_BLACK};
             font-size: 13px;
             padding: 6px 14px;
         }}
         QPushButton:hover {{
-            background: {common.COLOR_LIGHT_BLUE};
-            color: {common.COLOR_PRIMARY};
+            background: {COLOR_LIGHT_BLUE};
+            color: {COLOR_PRIMARY};
         }}
         QPushButton:checked {{
-            background: {common.COLOR_PRIMARY};
-            color: {common.COLOR_WHITE};
-            border-color: {common.COLOR_PRIMARY};
+            background: {COLOR_PRIMARY};
+            color: {COLOR_WHITE};
+            border-color: {COLOR_PRIMARY};
         }}
         QPushButton#clear {{
             background: #FDECEC;
@@ -487,7 +548,7 @@ class Whiteboard(StrokeCanvas):
     def _set_tool(self, tool):
         """
         切换当前书写工具：
-        - 画笔：展开颜色区（淡入动画），使用细笔触
+        - 画笔：展开颜色区（宽度展开动画），使用细笔触
         - 橡皮：收起颜色区，使用固定粗笔触
         """
         self.tool = tool
@@ -505,9 +566,11 @@ class Whiteboard(StrokeCanvas):
         self.btn_eraser.setChecked(self.tool == "eraser")
 
     def _show_color_panel(self):
-        """以淡入动画展开颜色区。"""
+        """以宽度展开动画弹出颜色区。"""
         self.color_panel.show()
-        self._color_effect.setOpacity(0.0)
+        self._color_anim.stop()
+        self._color_anim.setStartValue(0)
+        self._color_anim.setEndValue(self.color_panel.sizeHint().width())
         self._color_anim.start()
 
     def _hide_color_panel(self):
@@ -524,7 +587,7 @@ class Whiteboard(StrokeCanvas):
         """刷新颜色按钮样式：当前选中的色块加蓝色描边。"""
         for btn, color in zip(self.color_buttons, BOARD_COLORS):
             border = (
-                common.COLOR_PRIMARY if color == self.color else common.COLOR_WHITE
+                COLOR_PRIMARY if color == self.color else COLOR_WHITE
             )
             btn.setStyleSheet(
                 f"QPushButton {{ background: {color}; border: 2px solid {border};"
@@ -538,7 +601,7 @@ class Whiteboard(StrokeCanvas):
         now = QDateTime.currentDateTime()
         self.time_label.setText(now.toString("HH:mm:ss"))
         self.date_label.setText(
-            f"{now.toString('yyyy年MM月dd日')} {common.weekday_name(now.date())}"
+            f"{now.toString('yyyy年MM月dd日')} {weekday_name(now.date())}"
         )
 
     def _toggle_time(self, checked):
@@ -570,13 +633,16 @@ class Whiteboard(StrokeCanvas):
             self.update()
 
     def _next_page(self):
-        """切换到下一页（末页时无动作）。"""
+        """切换到下一页；已是最后一页时自动添加一张新页并翻过去。"""
         if self.current_page_index < len(self.pages) - 1:
             self.current_page_index += 1
             self.canvas = self.pages[self.current_page_index]
             self.current_stroke = None
             self._update_page_label()
             self.update()
+        else:
+            # 已在最后一页：自动新建一页并翻到新页
+            self._add_page()
 
     def _update_page_label(self):
         """刷新页码显示，如 1/3。"""

@@ -4,6 +4,7 @@
 继承通用画布基类 StrokeCanvas，全屏透明覆盖层，
 可在任意应用上方直接书写标注。
 工具栏为独立置顶窗口，显示在屏幕顶部中央，避免透明层上的子控件在 Windows 下失效。
+本文件自包含运行所需的全部常量与工具函数。
 """
 
 from PySide6.QtCore import Qt
@@ -17,8 +18,15 @@ from PySide6.QtWidgets import (
     QVBoxLayout,
 )
 
-from utils import common
-from ui.whiteboard import BOARD_COLORS, StrokeCanvas
+from whiteboard import BOARD_COLORS, StrokeCanvas
+
+# 蓝白配色
+COLOR_PRIMARY = "#2F6BFF"        # 主蓝色
+COLOR_LIGHT_BLUE = "#EAF1FF"     # 浅蓝背景（悬停/选中底）
+COLOR_BORDER = "#C9DAFF"         # 浅蓝边框
+COLOR_WHITE = "#FFFFFF"          # 白色
+COLOR_TEXT_DARK = "#22304A"      # 主文字深色
+COLOR_TEXT_GRAY = "#7A8699"      # 次要文字灰色
 
 
 class MarkupToolbar(QFrame):
@@ -48,7 +56,7 @@ class MarkupToolbar(QFrame):
         # 标题
         title = QLabel("屏幕批注")
         title.setStyleSheet(
-            f"color: {common.COLOR_PRIMARY}; font-size: 14px; font-weight: bold;"
+            f"color: {COLOR_PRIMARY}; font-size: 14px; font-weight: bold;"
             f"padding: 0 6px;"
         )
 
@@ -77,7 +85,7 @@ class MarkupToolbar(QFrame):
         # 粗细调节
         self.width_label = QLabel()
         self.width_label.setStyleSheet(
-            f"color: {common.COLOR_TEXT_GRAY}; font-size: 12px;"
+            f"color: {COLOR_TEXT_GRAY}; font-size: 12px;"
         )
         self.width_slider = QSlider(Qt.Horizontal)
         self.width_slider.setRange(2, 30)
@@ -127,11 +135,11 @@ class MarkupToolbar(QFrame):
         return f"""
         QFrame#toolbar {{
             background: rgba(255, 255, 255, 242);
-            border: 1px solid {common.COLOR_BORDER};
+            border: 1px solid {COLOR_BORDER};
             border-radius: 10px;
         }}
         QFrame#divider {{
-            background: {common.COLOR_BORDER};
+            background: {COLOR_BORDER};
             border: none;
             max-width: 1px;
             min-width: 1px;
@@ -139,20 +147,20 @@ class MarkupToolbar(QFrame):
         }}
         QPushButton {{
             background: transparent;
-            border: 1px solid {common.COLOR_BORDER};
+            border: 1px solid {COLOR_BORDER};
             border-radius: 6px;
-            color: {common.COLOR_TEXT_DARK};
+            color: {COLOR_TEXT_DARK};
             font-size: 13px;
             padding: 6px 12px;
         }}
         QPushButton:hover {{
-            background: {common.COLOR_LIGHT_BLUE};
-            color: {common.COLOR_PRIMARY};
+            background: {COLOR_LIGHT_BLUE};
+            color: {COLOR_PRIMARY};
         }}
         QPushButton:checked {{
-            background: {common.COLOR_PRIMARY};
-            color: {common.COLOR_WHITE};
-            border-color: {common.COLOR_PRIMARY};
+            background: {COLOR_PRIMARY};
+            color: {COLOR_WHITE};
+            border-color: {COLOR_PRIMARY};
         }}
         QPushButton#exit {{
             color: #D64545;
@@ -163,14 +171,14 @@ class MarkupToolbar(QFrame):
         }}
         QSlider::groove:horizontal {{
             height: 4px;
-            background: {common.COLOR_BORDER};
+            background: {COLOR_BORDER};
             border-radius: 2px;
         }}
         QSlider::handle:horizontal {{
             width: 14px;
             height: 14px;
             margin: -5px 0;
-            background: {common.COLOR_PRIMARY};
+            background: {COLOR_PRIMARY};
             border-radius: 7px;
         }}
         """
@@ -186,7 +194,7 @@ class MarkupToolbar(QFrame):
         """刷新颜色按钮选中状态。"""
         for btn, color in zip(self.color_buttons, BOARD_COLORS):
             border = (
-                common.COLOR_PRIMARY if color == self.owner.color else common.COLOR_WHITE
+                COLOR_PRIMARY if color == self.owner.color else COLOR_WHITE
             )
             btn.setStyleSheet(
                 f"QPushButton {{ background: {color}; border: 2px solid {border};"

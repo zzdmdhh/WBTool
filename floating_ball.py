@@ -6,12 +6,16 @@
 - 单击弹出功能选择条（白板 / 屏幕批注 / 关闭）
 - 长按进入关于界面
 同时负责管理白板、屏幕批注、关于界面的创建与显示。
+本文件自包含运行所需的全部常量与工具函数。
 """
+
+import os
 
 from PySide6.QtCore import QEvent, QPoint, Qt, QTimer
 from PySide6.QtGui import (
     QColor,
     QFont,
+    QGuiApplication,
     QPainter,
     QPainterPath,
     QPalette,
@@ -26,10 +30,50 @@ from PySide6.QtWidgets import (
     QWidget,
 )
 
-from utils import common
-from ui.about_dialog import AboutDialog
-from ui.screen_markup import ScreenMarkup
-from ui.whiteboard import Whiteboard
+from about_dialog import AboutDialog
+from screen_markup import ScreenMarkup
+from whiteboard import Whiteboard
+
+# ============ 文件路径 ============
+PROJECT_ROOT = os.path.dirname(os.path.abspath(__file__))
+# Logo 图片路径：将 logo.png 放入项目根目录的 assets/ 文件夹即可自动显示
+LOGO_PATH = os.path.join(PROJECT_ROOT, "assets", "logo.png")
+
+# ============ 蓝白配色 ============
+COLOR_PRIMARY = "#2F6BFF"        # 主蓝色
+COLOR_LIGHT_BLUE = "#EAF1FF"     # 浅蓝背景（悬停/选中底）
+COLOR_BORDER = "#C9DAFF"         # 浅蓝边框
+COLOR_WHITE = "#FFFFFF"          # 白色
+COLOR_TEXT_DARK = "#22304A"      # 主文字深色
+
+# ============ 悬浮球 ============
+BALL_SIZE = 56                   # 悬浮球边长
+SNAP_THRESHOLD = 60              # 边缘吸附判定阈值（像素）
+LONG_PRESS_MS = 700              # 长按判定时间（毫秒）
+DRAG_THRESHOLD = 8               # 拖动判定阈值（像素）
+
+# ============ 功能选择条 ============
+BAR_BUTTON_HEIGHT = 40           # 功能按钮高度
+BAR_BUTTON_WIDTH = 100           # 功能按钮宽度
+BAR_PADDING = 8                  # 功能条内边距
+
+
+def available_screen_geometry(widget=None):
+    """
+    获取当前屏幕的可用区域（排除任务栏）。
+
+    参数:
+        widget: 需要定位的控件（多屏场景下用于判断所在屏幕）
+
+    返回:
+        QRect 屏幕可用区域
+    """
+    if widget is not None:
+        screen = widget.screen()
+        if screen is not None:
+            return screen.availableGeometry()
+    # 兜底：使用主屏幕
+    return QGuiApplication.primaryScreen().availableGeometry()
 
 
 class FunctionBar(QFrame):
@@ -47,22 +91,22 @@ class FunctionBar(QFrame):
 
         # 固定完整尺寸：确保首次弹出时读取的宽高准确，定位不偏移
         self.setFixedSize(
-            common.BAR_BUTTON_WIDTH * 3 + common.BAR_PADDING * 2 + 2,
-            common.BAR_BUTTON_HEIGHT + common.BAR_PADDING * 2,
+            BAR_BUTTON_WIDTH * 3 + BAR_PADDING * 2 + 2,
+            BAR_BUTTON_HEIGHT + BAR_PADDING * 2,
         )
 
         # 不透明白色背景：圆角外的角落也保持白色
         self.setAutoFillBackground(True)
         palette = self.palette()
-        palette.setColor(QPalette.Window, QColor(common.COLOR_WHITE))
+        palette.setColor(QPalette.Window, QColor(COLOR_WHITE))
         self.setPalette(palette)
         self.setStyleSheet(self._style())
 
         # 横向布局
         layout = QHBoxLayout(self)
         layout.setContentsMargins(
-            common.BAR_PADDING, common.BAR_PADDING,
-            common.BAR_PADDING, common.BAR_PADDING,
+            BAR_PADDING, BAR_PADDING,
+            BAR_PADDING, BAR_PADDING,
         )
         layout.setSpacing(0)
 
@@ -86,7 +130,7 @@ class FunctionBar(QFrame):
     def _create_button(self, text, quit_style=False):
         """创建功能按钮。"""
         btn = QPushButton(text)
-        btn.setFixedSize(common.BAR_BUTTON_WIDTH, common.BAR_BUTTON_HEIGHT)
+        btn.setFixedSize(BAR_BUTTON_WIDTH, BAR_BUTTON_HEIGHT)
         btn.setCursor(Qt.PointingHandCursor)
         if quit_style:
             btn.setObjectName("quit")
@@ -96,31 +140,31 @@ class FunctionBar(QFrame):
         """创建竖直分隔线。"""
         line = QFrame()
         line.setObjectName("divider")
-        line.setFixedSize(1, common.BAR_BUTTON_HEIGHT - 12)
+        line.setFixedSize(1, BAR_BUTTON_HEIGHT - 12)
         return line
 
     def _style(self):
         """功能条样式：白底蓝边圆角卡片。"""
         return f"""
         QFrame#bar {{
-            background: {common.COLOR_WHITE};
-            border: 1px solid {common.COLOR_BORDER};
+            background: {COLOR_WHITE};
+            border: 1px solid {COLOR_BORDER};
             border-radius: 10px;
         }}
         QFrame#divider {{
-            background: {common.COLOR_BORDER};
+            background: {COLOR_BORDER};
             border: none;
         }}
         QPushButton {{
             background: transparent;
             border: none;
-            color: {common.COLOR_TEXT_DARK};
+            color: {COLOR_TEXT_DARK};
             font-size: 14px;
             font-family: "Microsoft YaHei UI";
         }}
         QPushButton:hover {{
-            background: {common.COLOR_LIGHT_BLUE};
-            color: {common.COLOR_PRIMARY};
+            background: {COLOR_LIGHT_BLUE};
+            color: {COLOR_PRIMARY};
         }}
         QPushButton:pressed {{
             background: #D8E6FF;
@@ -177,7 +221,7 @@ class FloatingBall(QWidget):
             Qt.FramelessWindowHint | Qt.WindowStaysOnTopHint | Qt.Tool
         )
         self.setAttribute(Qt.WA_TranslucentBackground)  # 支持圆角透明外观
-        self.setFixedSize(common.BALL_SIZE, common.BALL_SIZE)
+        self.setFixedSize(BALL_SIZE, BALL_SIZE)
 
         self._dragging = False              # 是否正在拖动
         self._drag_offset = QPoint()        # 按下点相对窗口左上角的偏移
@@ -187,7 +231,7 @@ class FloatingBall(QWidget):
         # 长按定时器：按住超过阈值后进入关于界面
         self._press_timer = QTimer(self)
         self._press_timer.setSingleShot(True)
-        self._press_timer.setInterval(common.LONG_PRESS_MS)
+        self._press_timer.setInterval(LONG_PRESS_MS)
         self._press_timer.timeout.connect(self._on_long_press)
 
         # 功能选择条（懒加载，单击时才创建）
@@ -199,7 +243,7 @@ class FloatingBall(QWidget):
 
     def _init_position(self):
         """初始位置：屏幕右侧垂直居中，贴右边缘。"""
-        screen = common.available_screen_geometry(self)
+        screen = available_screen_geometry(self)
         x = screen.right() - self.width()
         y = screen.top() + (screen.height() - self.height()) // 2
         self.move(x, y)
@@ -219,12 +263,12 @@ class FloatingBall(QWidget):
         painter.drawEllipse(rect.translated(0, 3))
 
         # 白色主体 + 蓝色描边
-        painter.setPen(QPen(QColor(common.COLOR_PRIMARY), 3))
-        painter.setBrush(QColor(common.COLOR_WHITE))
+        painter.setPen(QPen(QColor(COLOR_PRIMARY), 3))
+        painter.setBrush(QColor(COLOR_WHITE))
         painter.drawEllipse(rect)
 
         # Logo：assets/logo.png 存在时优先绘制，否则显示 W 文字图标
-        logo = QPixmap(common.LOGO_PATH)
+        logo = QPixmap(LOGO_PATH)
         if not logo.isNull():
             inner = rect.adjusted(6, 6, -6, -6)
             logo = logo.scaled(
@@ -239,7 +283,7 @@ class FloatingBall(QWidget):
             painter.drawPixmap(x, y, logo)
             painter.restore()
         else:
-            painter.setPen(QColor(common.COLOR_PRIMARY))
+            painter.setPen(QColor(COLOR_PRIMARY))
             painter.setFont(QFont("Microsoft YaHei UI", 18, QFont.Bold))
             painter.drawText(rect, Qt.AlignCenter, "W")
 
@@ -261,7 +305,7 @@ class FloatingBall(QWidget):
             moved = (
                 event.globalPosition().toPoint() - self._pressed_pos
             ).manhattanLength()
-            if moved > common.DRAG_THRESHOLD:
+            if moved > DRAG_THRESHOLD:
                 if not self._dragging:
                     self._dragging = True
                     self._press_timer.stop()  # 拖动不算长按
@@ -301,7 +345,7 @@ class FloatingBall(QWidget):
             self.function_bar.close()
             return
         # 计算位置：优先显示在悬浮球右侧，空间不足时显示在左侧
-        screen = common.available_screen_geometry(self)
+        screen = available_screen_geometry(self)
         bar_w = self.function_bar.width()
         x = self.x() + self.width() + 8
         if x + bar_w > screen.right():
@@ -338,16 +382,16 @@ class FloatingBall(QWidget):
 
     def _move_within_screen(self, target_pos):
         """移动窗口并限制在屏幕范围内。"""
-        screen = common.available_screen_geometry(self)
+        screen = available_screen_geometry(self)
         x = max(screen.left(), min(target_pos.x(), screen.right() - self.width()))
         y = max(screen.top(), min(target_pos.y(), screen.bottom() - self.height()))
         self.move(x, y)
 
     def _snap_to_edge(self):
         """检测窗口是否贴近屏幕边缘，若是则吸附到边缘。"""
-        screen = common.available_screen_geometry(self)
+        screen = available_screen_geometry(self)
         x, y = self.x(), self.y()
-        threshold = common.SNAP_THRESHOLD
+        threshold = SNAP_THRESHOLD
 
         if x <= screen.left() + threshold:
             x = screen.left()

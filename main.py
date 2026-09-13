@@ -10,10 +10,13 @@ import sys
 from PySide6.QtCore import Qt
 from PySide6.QtWidgets import QApplication
 
-from ui.floating_ball import FloatingBall
-from ui.info_panel import InfoPanel
-from ui.schedule_widget import ScheduleWidget
-from utils import common
+from floating_ball import FloatingBall
+from info_panel import InfoPanel
+from schedule_widget import ScheduleWidget
+
+# 应用名称与版本号
+APP_NAME = "WBTool"
+APP_VERSION = "1.0.0.100"
 
 
 def main():
@@ -23,8 +26,8 @@ def main():
     )
 
     app = QApplication(sys.argv)
-    app.setApplicationName(common.APP_NAME)
-    app.setApplicationVersion(common.APP_VERSION)
+    app.setApplicationName(APP_NAME)
+    app.setApplicationVersion(APP_VERSION)
     # 关闭所有窗口时不自动退出，由悬浮球菜单的“关闭”按钮显式退出
     app.setQuitOnLastWindowClosed(False)
 
