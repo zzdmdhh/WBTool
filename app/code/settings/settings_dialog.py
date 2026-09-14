@@ -42,14 +42,16 @@ DIALOG_HEIGHT = 540              # 对话框高度
 SIDEBAR_WIDTH = 168              # 左侧导航宽度
 NAV_BUTTON_HEIGHT = 44           # 导航按钮高度
 
-# 页面定义：(导航标题, 设置段名, 页面类)；段名为 None 的页面不参与设置读写
+# 页面定义：(导航标题, 设置段名, 页面类, 是否可用)
+# 当前磨合阶段仅开放白板设置，其余设置项暂时置灰不可用；
+# 段名为 None 的页面不参与设置读写。
 PAGE_DEFINITIONS = [
-    ("系统设置", "system", SystemPage),
-    ("白板", "whiteboard", WhiteboardPage),
-    ("屏幕批注", "markup", MarkupPage),
-    ("课程表", "schedule", SchedulePage),
-    ("信息面板", "info", InfoPage),
-    ("关于", None, AboutPage),
+    ("系统设置", "system", SystemPage, False),
+    ("白板", "whiteboard", WhiteboardPage, True),
+    ("屏幕批注", "markup", MarkupPage, False),
+    ("课程表", "schedule", SchedulePage, False),
+    ("信息面板", "info", InfoPage, False),
+    ("关于", None, AboutPage, True),
 ]
 
 
@@ -70,7 +72,7 @@ class SettingsDialog(QDialog):
         self._nav_buttons = []  # 导航按钮列表
 
         self._build_ui()
-        self._select_page(0)
+        self._select_page(self._first_available_index())
         self._center()
 
     # ---------- UI 构建 ----------
@@ -120,7 +122,7 @@ class SettingsDialog(QDialog):
 
         group = QButtonGroup(self)
         group.setExclusive(True)
-        for index, (name, section, page_cls) in enumerate(PAGE_DEFINITIONS):
+        for index, (name, section, page_cls, available) in enumerate(PAGE_DEFINITIONS):
             btn = QPushButton(name)
             btn.setCheckable(True)
             btn.setFixedHeight(NAV_BUTTON_HEIGHT)
@@ -128,6 +130,8 @@ class SettingsDialog(QDialog):
             btn.clicked.connect(
                 lambda checked=False, i=index: self._select_page(i)
             )
+            if not available:
+                btn.setEnabled(False)  # 暂未开放的设置项置灰
             group.addButton(btn)
             layout.addWidget(btn)
             self._nav_buttons.append(btn)
@@ -137,7 +141,7 @@ class SettingsDialog(QDialog):
     def _build_pages(self):
         """右侧页面堆栈：按定义实例化各设置页面并载入当前设置。"""
         self.stack = QStackedWidget()
-        for name, section, page_cls in PAGE_DEFINITIONS:
+        for name, section, page_cls, available in PAGE_DEFINITIONS:
             page = page_cls()
             if section is not None:
                 page.load_values(self.manager.get(section))
@@ -179,18 +183,32 @@ class SettingsDialog(QDialog):
         self.stack.setCurrentIndex(index)
         self._nav_buttons[index].setChecked(True)
 
+    def _first_available_index(self):
+        """返回第一个可用的页面索引（默认展示页面）。"""
+        for index, (name, section, page_cls, available) in enumerate(
+            PAGE_DEFINITIONS
+        ):
+            if available:
+                return index
+        return 0
+
     # ---------- 保存 / 恢复 ----------
 
     def _on_save(self):
-        """收集所有页面的值写入设置文件，并执行需要立即生效的操作。"""
+        """收集可用页面的值写入设置文件，并执行需要立即生效的操作。"""
         try:
-            for (name, section, page_cls), page in zip(
+            for (name, section, page_cls, available), page in zip(
                 PAGE_DEFINITIONS, self._pages
             ):
-                if section is not None:
-                    self.manager.update_section(section, page.values())
+                if section is None or not available:
+                    continue  # 跳过暂未开放的设置项
+                self.manager.update_section(section, page.values())
             # 执行页面附加操作（如开机自启动注册表写入）
-            for page in self._pages:
+            for (name, section, page_cls, available), page in zip(
+                PAGE_DEFINITIONS, self._pages
+            ):
+                if not available:
+                    continue
                 apply_method = getattr(page, "apply", None)
                 if callable(apply_method):
                     ok, error = apply_method()
@@ -207,7 +225,7 @@ class SettingsDialog(QDialog):
     def _on_reset(self):
         """将当前页面恢复为默认值。"""
         index = self.stack.currentIndex()
-        name, section, page_cls = PAGE_DEFINITIONS[index]
+        name, section, page_cls, available = PAGE_DEFINITIONS[index]
         if section is None:
             return
         ret = QMessageBox.question(
@@ -250,6 +268,10 @@ class SettingsDialog(QDialog):
             background: {COLOR_PRIMARY};
             color: {COLOR_WHITE};
             font-weight: bold;
+        }}
+        QPushButton:disabled {{
+            color: #AAB4C4;
+            background: transparent;
         }}
         QFrame#footer {{
             background: #F7F9FE;

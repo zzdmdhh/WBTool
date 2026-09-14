@@ -9,6 +9,7 @@ from PySide6.QtWidgets import (
     QCheckBox,
     QHBoxLayout,
     QLabel,
+    QLineEdit,
     QSlider,
     QSpinBox,
     QVBoxLayout,
@@ -98,6 +99,19 @@ class WhiteboardPage(QWidget):
         self.show_time_check.setCursor(Qt.PointingHandCursor)
         layout.addWidget(self.show_time_check)
 
+        layout.addSpacing(6)
+
+        # 右上角标语
+        self.slogan_edit = QLineEdit()
+        self.slogan_edit.setPlaceholderText("例如：欢迎使用智慧大屏，开启高效课堂")
+        self.slogan_edit.setClearButtonEnabled(True)
+        self.slogan_edit.setFixedWidth(320)
+        layout.addLayout(make_form_row("右上角标语", self.slogan_edit))
+        slogan_hint = QLabel("显示在白板右上角，留空则不显示；保存后下次打开白板生效")
+        slogan_hint.setStyleSheet(f"color: {COLOR_TEXT_GRAY}; font-size: 12px;")
+        slogan_hint.setIndent(106)
+        layout.addWidget(slogan_hint)
+
         layout.addStretch(1)
 
     # ---------- 数据读写 ----------
@@ -111,6 +125,7 @@ class WhiteboardPage(QWidget):
         self.eraser_width_label.setText(f"{self.eraser_width_slider.value()}px")
         self.max_pages_spin.setValue(int(values.get("max_pages", 99)))
         self.show_time_check.setChecked(bool(values.get("show_time", False)))
+        self.slogan_edit.setText(str(values.get("slogan", "")))
 
     def values(self):
         """从界面控件收集设置值。"""
@@ -120,4 +135,5 @@ class WhiteboardPage(QWidget):
             "default_eraser_width": self.eraser_width_slider.value(),
             "max_pages": self.max_pages_spin.value(),
             "show_time": self.show_time_check.isChecked(),
+            "slogan": self.slogan_edit.text().strip(),
         }

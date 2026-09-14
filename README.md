@@ -20,7 +20,12 @@ WBTool/
     └── code/                    # 代码目录
         ├── active/              # 正在使用的代码（当前发行版）
         │   ├── floating_ball.py # 悬浮球（含功能选择条），管理白板/设置
-        │   └── whiteboard.py    # 白板
+        │   └── whiteboard/      # 白板模块（模块化拆分）
+        │       ├── __init__.py      # 对外导出 Whiteboard / StrokeCanvas / BOARD_COLORS
+        │       ├── constants.py     # 色板、配色、尺寸常量与工具函数
+        │       ├── canvas.py        # StrokeCanvas 画布基类
+        │       ├── widgets.py       # ToolPopup 工具设置弹出框
+        │       └── whiteboard.py    # Whiteboard 主窗口
         ├── settings/            # 设置模块（由原关于界面升级而来）
         │   ├── settings_dialog.py   # 设置对话框（侧边导航 + 页面堆栈）
         │   ├── settings_manager.py  # 设置读写（settings.json）
@@ -48,15 +53,12 @@ python main.py
 ## 当前版本功能说明
 
 - 悬浮球：左键拖动移动，松手后靠近屏幕边缘自动吸附
-- 单击悬浮球：弹出横向功能选择条（白板、设置、关闭）
-- 长按悬浮球（默认约 0.7 秒，可在设置中调整）：进入设置界面
-- 白板：全屏白色画布，右上角时间显示，底部工具栏支持画笔/橡皮、颜色、粗细、清空、关闭
-- 设置界面：左侧分类导航，包含系统设置、白板、屏幕批注、课程表、信息面板、关于六个页面
-  - 系统设置：悬浮球大小、长按打开设置的时长、边缘吸附阈值、开机自启动
-  - 白板设置：默认画笔颜色/粗细、默认橡皮粗细、最大页数、默认显示时间
-  - 屏幕批注设置：默认画笔颜色、默认笔画粗细
-  - 课程表设置：刷新间隔，快速打开课程表配置文件
-  - 信息面板设置：刷新间隔、面板宽度，快速打开信息面板配置文件
+- 单击悬浮球：弹出横向功能选择条（白板、退出）
+- 长按悬浮球（默认约 0.7 秒）：进入设置界面（唯一设置入口）
+- 白板：全屏白色画布，右上角标语，底部工具栏支持画笔/橡皮、颜色、粗细、清空、关闭；左上角时间显示
+- 设置界面：左侧分类导航，目前仅开放白板设置，其余设置项暂时置灰
+  - 白板设置：默认画笔颜色/粗细、默认橡皮粗细、最大页数、默认显示时间、右上角标语
+  - 系统设置 / 屏幕批注 / 课程表 / 信息面板：暂未开放（后续版本）
   - 关于：应用信息、版本号与检查更新入口
 
 ## 配置文件格式说明
@@ -66,7 +68,7 @@ python main.py
 由设置界面自动生成与管理，无需手动编辑；缺失的设置项自动回落到默认值。
 
 - `system`：悬浮球边长 `ball_size`、长按判定时间 `long_press_ms`（毫秒）、吸附阈值 `snap_threshold`（像素）
-- `whiteboard`：默认画笔颜色 `default_color`、默认画笔粗细 `default_pen_width`、默认橡皮粗细 `default_eraser_width`、最大页数 `max_pages`、默认显示时间 `show_time`
+- `whiteboard`：默认画笔颜色 `default_color`、默认画笔粗细 `default_pen_width`、默认橡皮粗细 `default_eraser_width`、最大页数 `max_pages`、默认显示时间 `show_time`、右上角标语 `slogan`（空则不显示）
 - `markup`：默认画笔颜色 `default_color`、默认笔画粗细 `default_width`
 - `schedule`：刷新间隔 `refresh_seconds`（秒）
 - `info`：刷新间隔 `refresh_seconds`（秒）、面板宽度 `panel_width`（像素）

@@ -1,38 +1,17 @@
 # -*- coding: utf-8 -*-
 """
-白板组件
-自包含实现全部白板功能，可独立运行（python whiteboard.py），
+白板模块 - 主窗口
+Whiteboard：全屏白色画布窗口，支持多页书写、翻页、保存与工具设置。
+顶部右侧可显示由设置指定的标语（白板设置 → 右上角标语）。
+可独立运行（python -m app.code.active.whiteboard.whiteboard），
 也可由悬浮球菜单的"白板"按钮打开。
-
-包含：
-- BOARD_COLORS：画笔颜色色板（白板与屏幕批注共用）
-- StrokeCanvas：可书写/擦除的离屏渲染画布基类（白板与屏幕批注共用）
-- ToolPopup：从工具按钮向上弹出的设置面板，点击外部自动关闭
-- Whiteboard：全屏白色画布窗口，支持多页书写、翻页、保存与工具设置
 """
 
 import os
 import sys
 
-from PySide6.QtCore import (
-    QDate,
-    QDateTime,
-    QEvent,
-    QPoint,
-    QPointF,
-    QRect,
-    Qt,
-    QTimer,
-    Signal,
-)
-from PySide6.QtGui import (
-    QColor,
-    QGuiApplication,
-    QPainter,
-    QPainterPath,
-    QPen,
-    QPixmap,
-)
+from PySide6.QtCore import QDateTime, QPoint, Qt, QTimer
+from PySide6.QtGui import QGuiApplication, QPainter, QPixmap
 from PySide6.QtWidgets import (
     QApplication,
     QFileDialog,
@@ -47,340 +26,28 @@ from PySide6.QtWidgets import (
 
 from app.code.settings.settings_manager import SettingsManager
 
-# ============ 画笔色板 ============
-# 画笔可选颜色（黑、红、蓝、绿、橙、紫、粉、青），白板与屏幕批注共用
-BOARD_COLORS = [
-    "#1F2937",  # 黑
-    "#E53935",  # 红
-    "#2F6BFF",  # 蓝
-    "#2E7D32",  # 绿
-    "#F57C00",  # 橙
-    "#8E24AA",  # 紫
-    "#EC407A",  # 粉
-    "#00ACC1",  # 青
-]
-
-# ============ 蓝白配色 ============
-COLOR_PRIMARY = "#2F6BFF"      # 主蓝色（选中/高亮）
-COLOR_LIGHT_BLUE = "#EAF1FF"   # 浅蓝（悬停背景）
-COLOR_BORDER = "#C9DAFF"       # 浅蓝边框
-COLOR_WHITE = "#FFFFFF"        # 白色
-
-# 白板内文字统一使用的纯黑颜色
-TEXT_COLOR_BLACK = "#000000"
-
-# ============ 尺寸与限制 ============
-PEN_WIDTH = 4          # 画笔默认笔触宽度
-ERASER_WIDTH = 20      # 橡皮默认笔触宽度
-MAX_PAGES = 99         # 白板最大页数
-BTN_SIZE = 44          # 正方形按钮边长
-PANEL_MARGIN = 36      # 角落面板与屏幕边缘的间距
-TIME_FONT_SIZE = 56    # 左上角日期/时间字号
-
-
-def weekday_name(date=None):
-    """
-    返回日期对应的中文星期名（星期一~星期日）。
-
-    参数:
-        date: QDate 对象，缺省时使用当天
-
-    返回:
-        字符串，如 "星期一"
-    """
-    if date is None:
-        date = QDate.currentDate()
-    names = ["星期一", "星期二", "星期三", "星期四", "星期五", "星期六", "星期日"]
-    return names[date.dayOfWeek() - 1]
-
-
-# ============ 画布基类 ============
-
-class StrokeCanvas(QWidget):
-    """
-    可书写/擦除的离屏渲染画布基类，供白板与屏幕批注复用：
-    - 已完成的笔画只渲染一次到离屏缓冲，后续重绘开销与笔画数量无关
-    - 当前笔画用二次贝塞尔曲线平滑连接采样点，线条连贯
-    - 橡皮擦：透明背景使用 Clear 擦除；不透明背景使用背景色覆盖
-    """
-
-    closed = Signal()  # 窗口关闭信号，供外部监听关闭动作
-
-    def __init__(self, background=None, parent=None):
-        """
-        初始化画布状态。
-
-        参数:
-            background: 画布背景色（QColor 或颜色字符串），None 表示透明背景
-        """
-        super().__init__(parent)
-        self.background = QColor(background) if background else None
-
-        self.canvas = QPixmap(1, 1)   # 离屏缓冲：存放已完成的笔画，减少重绘开销
-        self.current_stroke = None    # 当前绘制中的笔画数据（类型/颜色/宽度/采样点）
-        self.tool = "pen"             # 当前工具：pen（画笔）/ eraser（橡皮）
-        self.color = BOARD_COLORS[0]  # 当前画笔颜色
-        self.width = PEN_WIDTH        # 当前笔画粗细
-
-        # 窗口属性：无边框、置顶、工具窗（不占用任务栏）
-        self.setWindowFlags(
-            Qt.FramelessWindowHint | Qt.WindowStaysOnTopHint | Qt.Tool
-        )
-
-    # ---------- 绘制 ----------
-
-    def paintEvent(self, event):
-        """绘制背景、已完成的笔画与正在绘制的笔画。"""
-        painter = QPainter(self)
-        if self.background is not None:
-            painter.fillRect(self.rect(), self.background)
-        painter.drawPixmap(0, 0, self.canvas)
-        if self.current_stroke is not None:
-            self._render_stroke(painter, self.current_stroke)
-
-    def resizeEvent(self, event):
-        """窗口尺寸变化时按新尺寸重建离屏缓冲，并保留原有内容。"""
-        super().resizeEvent(event)
-        new_canvas = QPixmap(self.size())
-        if self.background is not None:
-            new_canvas.fill(self.background)
-        else:
-            new_canvas.fill(Qt.transparent)
-        painter = QPainter(new_canvas)
-        painter.drawPixmap(0, 0, self.canvas)
-        painter.end()
-        self.canvas = new_canvas
-
-    def _render_stroke(self, painter, stroke):
-        """将一条笔画按画笔/橡皮两种模式绘制到目标 painter 上。"""
-        points = stroke["points"]
-        if len(points) < 2:
-            return
-        if stroke["kind"] == "eraser":
-            if self.background is None:
-                # 透明背景：将笔画路径擦除为完全透明
-                painter.setCompositionMode(QPainter.CompositionMode_Clear)
-                pen = QPen(
-                    QColor(0, 0, 0, 0), stroke["width"],
-                    Qt.SolidLine, Qt.RoundCap, Qt.RoundJoin,
-                )
-            else:
-                # 不透明背景：用背景色覆盖笔画路径，等效于擦除
-                painter.setCompositionMode(QPainter.CompositionMode_SourceOver)
-                pen = QPen(
-                    self.background, stroke["width"],
-                    Qt.SolidLine, Qt.RoundCap, Qt.RoundJoin,
-                )
-        else:
-            painter.setCompositionMode(QPainter.CompositionMode_SourceOver)
-            pen = QPen(
-                QColor(stroke["color"]), stroke["width"],
-                Qt.SolidLine, Qt.RoundCap, Qt.RoundJoin,
-            )
-        painter.setPen(pen)
-        painter.drawPath(self._stroke_path(points))
-
-    def _stroke_path(self, points):
-        """
-        将采样点构建为平滑路径。
-
-        使用二次贝塞尔曲线：以相邻两点的中点为曲线端点、采样点为控制点，
-        避免直线段连接造成的折线感，保证线条连贯。
-        """
-        path = QPainterPath(QPointF(points[0]))
-        if len(points) < 3:
-            # 采样点太少时直接用直线连接
-            for point in points[1:]:
-                path.lineTo(QPointF(point))
-            return path
-        # 以相邻两点的中点为端点、采样点为控制点逐段平滑
-        for i in range(len(points) - 2):
-            mid = QPointF(
-                (points[i + 1].x() + points[i + 2].x()) / 2.0,
-                (points[i + 1].y() + points[i + 2].y()) / 2.0,
-            )
-            path.quadTo(QPointF(points[i + 1]), mid)
-        path.lineTo(QPointF(points[-1]))
-        return path
-
-    # ---------- 鼠标事件 ----------
-
-    def mousePressEvent(self, event):
-        """按下鼠标左键：记录起点并开始一条新笔画。"""
-        if event.button() == Qt.LeftButton:
-            self.current_stroke = {
-                "kind": "eraser" if self.tool == "eraser" else "pen",
-                "color": self.color,
-                "width": self.width,
-                "points": [event.position().toPoint()],
-            }
-        super().mousePressEvent(event)
-
-    def mouseMoveEvent(self, event):
-        """按住左键移动：向当前笔画追加采样点并触发重绘。"""
-        if self.current_stroke is not None and event.buttons() & Qt.LeftButton:
-            pos = event.position().toPoint()
-            points = self.current_stroke["points"]
-            # 过滤过于密集的重复采样点，减少数据量与卡顿
-            if not points or (pos - points[-1]).manhattanLength() >= 2:
-                points.append(pos)
-            self.update()
-        super().mouseMoveEvent(event)
-
-    def mouseReleaseEvent(self, event):
-        """松开左键：完成当前笔画并渲染到离屏缓冲。"""
-        if event.button() == Qt.LeftButton and self.current_stroke is not None:
-            self._commit_stroke(self.current_stroke)
-            self.current_stroke = None
-        super().mouseReleaseEvent(event)
-
-    def _commit_stroke(self, stroke):
-        """将一条已完成的笔画渲染进离屏缓冲，保证后续重绘无需重画。"""
-        painter = QPainter(self.canvas)
-        painter.setRenderHint(QPainter.Antialiasing)
-        self._render_stroke(painter, stroke)
-        painter.end()
-        self.update()
-
-    # ---------- 画布操作 ----------
-
-    def clear_canvas(self):
-        """清空画布全部内容，恢复为空白背景。"""
-        if self.background is not None:
-            self.canvas.fill(self.background)
-        else:
-            self.canvas.fill(Qt.transparent)
-        self.current_stroke = None
-        self.update()
-
-    # ---------- 键盘与关闭 ----------
-
-    def keyPressEvent(self, event):
-        """按 Esc 键快速关闭白板。"""
-        if event.key() == Qt.Key_Escape:
-            self.close()
-        super().keyPressEvent(event)
-
-    def closeEvent(self, event):
-        """窗口关闭时发出关闭信号。"""
-        self.closed.emit()
-        super().closeEvent(event)
-
-
-# ============ 工具设置弹出框 ============
-
-class ToolPopup(QFrame):
-    """从工具按钮向上弹出的设置面板，点击面板外部自动关闭。"""
-
-    def __init__(self, parent=None):
-        super().__init__(parent)
-        self.anchor = None  # 触发本弹出框的按钮，用于判断点击是否落在按钮上
-
-        # 作为父窗口的子控件显示，与底部工具栏相同的绘制方式与半透明效果
-        self.setObjectName("popup")
-        self.setStyleSheet(self._style())
-
-        self.body = QVBoxLayout(self)  # 内容容器：由白板按工具类型填充
-        self.body.setContentsMargins(12, 10, 12, 10)
-        self.body.setSpacing(8)
-
-        # 创建后立即隐藏，避免父窗口显示时弹出框跟着自动显示在左上角
-        self.hide()
-
-    def _style(self):
-        """弹出框样式：半透明白底蓝边圆角，含按钮、标签与两种滑块样式。"""
-        return f"""
-        QFrame#popup {{
-            background: rgba(255, 255, 255, 235);
-            border: 1px solid {COLOR_BORDER};
-            border-radius: 12px;
-        }}
-        QPushButton {{
-            background: transparent;
-            border: 1px solid {COLOR_BORDER};
-            border-radius: 6px;
-            color: {TEXT_COLOR_BLACK};
-            font-size: 13px;
-            padding: 6px 14px;
-        }}
-        QPushButton:hover {{
-            background: {COLOR_LIGHT_BLUE};
-            color: {COLOR_PRIMARY};
-        }}
-        QPushButton#danger {{
-            background: #FDECEC;
-            border: 1px solid #F0B8B8;
-            color: #C0392B;
-        }}
-        QPushButton#danger:hover {{
-            background: #F8D7DA;
-            color: #A93226;
-        }}
-        QLabel {{
-            color: {TEXT_COLOR_BLACK};
-            font-size: 13px;
-        }}
-        QSlider::groove:horizontal {{
-            height: 4px;
-            background: {COLOR_BORDER};
-            border-radius: 2px;
-        }}
-        QSlider::handle:horizontal {{
-            width: 14px;
-            height: 14px;
-            margin: -5px 0;
-            background: {COLOR_PRIMARY};
-            border-radius: 7px;
-        }}
-        QSlider#clearSlider::groove:horizontal {{
-            height: 22px;
-            background: #FDECEC;
-            border: 1px solid #F0B8B8;
-            border-radius: 11px;
-        }}
-        QSlider#clearSlider::handle:horizontal {{
-            width: 26px;
-            height: 26px;
-            margin: -2px 0;
-            background: #C0392B;
-            border-radius: 13px;
-        }}
-        """
-
-    # ---------- 外部点击关闭 ----------
-
-    def showEvent(self, event):
-        """显示时安装全局事件过滤器。"""
-        QApplication.instance().installEventFilter(self)
-        super().showEvent(event)
-
-    def hideEvent(self, event):
-        """隐藏时移除全局事件过滤器。"""
-        QApplication.instance().removeEventFilter(self)
-        super().hideEvent(event)
-
-    def eventFilter(self, obj, event):
-        """点击弹出框外部区域时自动关闭；点击触发按钮则交由按钮处理。"""
-        if event.type() == QEvent.MouseButtonPress:
-            pos = event.globalPosition().toPoint()
-            # 点击触发本弹出框的按钮：不在此关闭，由按钮切换弹出状态
-            if self.anchor is not None:
-                anchor_rect = QRect(
-                    self.anchor.mapToGlobal(QPoint(0, 0)), self.anchor.size()
-                )
-                if anchor_rect.contains(pos):
-                    return super().eventFilter(obj, event)
-            # 点击弹出框内部：交由内部控件处理
-            popup_rect = QRect(self.mapToGlobal(QPoint(0, 0)), self.size())
-            if popup_rect.contains(pos):
-                return super().eventFilter(obj, event)
-            # 点击其他区域：关闭弹出框
-            self.close()
-        return super().eventFilter(obj, event)
+from .canvas import StrokeCanvas
+from .constants import (
+    BOARD_COLORS,
+    BTN_SIZE,
+    COLOR_BORDER,
+    COLOR_LIGHT_BLUE,
+    COLOR_PRIMARY,
+    COLOR_TEXT_GRAY,
+    COLOR_WHITE,
+    ERASER_WIDTH,
+    MAX_PAGES,
+    PANEL_MARGIN,
+    PEN_WIDTH,
+    TEXT_COLOR_BLACK,
+    TIME_FONT_SIZE,
+    weekday_name,
+)
+from .widgets import ToolPopup
 
 
 class Whiteboard(StrokeCanvas):
-    """全屏白色画布窗口：左上角时间显示，底部工具栏与左下/右下角面板。"""
+    """全屏白色画布窗口：左上角时间显示，右上角标语，底部工具栏与左下/右下角面板。"""
 
     def __init__(self, parent=None):
         # 以不透明白色为背景创建画布
@@ -415,10 +82,11 @@ class Whiteboard(StrokeCanvas):
     # ---------- 窗口事件 ----------
 
     def showEvent(self, event):
-        """窗口显示时确保置顶并激活，便于接收鼠标键盘事件。"""
+        """窗口显示时确保置顶并激活，同时刷新右上角标语。"""
         super().showEvent(event)
         self.raise_()
         self.activateWindow()
+        self._update_slogan()
 
     def resizeEvent(self, event):
         """窗口尺寸变化时按新尺寸重建全部页面，并保留各页已有内容。"""
@@ -446,7 +114,7 @@ class Whiteboard(StrokeCanvas):
     # ---------- UI 构建 ----------
 
     def _build_ui(self):
-        """构建整体布局：左上角时间、底部工具栏、角落面板与工具弹出框。"""
+        """构建整体布局：左上角时间、右上角标语、底部工具栏、角落面板与工具弹出框。"""
         root = QVBoxLayout(self)
         # 底部留白与两侧角落面板一致，保证中间工具栏与两侧面板水平对齐
         root.setContentsMargins(28, 24, 28, PANEL_MARGIN)
@@ -464,9 +132,17 @@ class Whiteboard(StrokeCanvas):
         time_box.addWidget(self.date_label, 0, Qt.AlignLeft)
         time_box.addWidget(self.time_label, 0, Qt.AlignLeft)
 
+        # 右上角标语：内容由白板设置中的“右上角标语”决定，为空时不显示
+        self.slogan_label = QLabel()
+        self.slogan_label.setStyleSheet(
+            f"color: {COLOR_TEXT_GRAY}; font-size: 16px; font-weight: bold;"
+        )
+        self.slogan_label.setVisible(False)
+
         top_row = QHBoxLayout()
         top_row.addLayout(time_box)
         top_row.addStretch(1)
+        top_row.addWidget(self.slogan_label, 0, Qt.AlignRight | Qt.AlignVCenter)
         root.addLayout(top_row)
         root.addStretch(1)
 
@@ -898,6 +574,14 @@ class Whiteboard(StrokeCanvas):
         self.date_label.setVisible(checked)
         self.time_label.setVisible(checked)
 
+    # ---------- 右上角标语 ----------
+
+    def _update_slogan(self):
+        """从设置读取右上角标语；标语为空时隐藏。"""
+        slogan = str(SettingsManager().get("whiteboard", "slogan", "")).strip()
+        self.slogan_label.setText(slogan)
+        self.slogan_label.setVisible(bool(slogan))
+
     # ---------- 页管理 ----------
 
     def _add_page(self):
@@ -1055,6 +739,7 @@ class Whiteboard(StrokeCanvas):
 
 if __name__ == "__main__":
     # 独立运行入口：直接打开白板
+    # 运行方式：python -m app.code.active.whiteboard.whiteboard
     app = QApplication(sys.argv)
     board = Whiteboard()
     board.show()

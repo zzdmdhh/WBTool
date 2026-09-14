@@ -1,0 +1,26 @@
+{
+  "system": {
+    "ball_size": 56,
+    "long_press_ms": 700,
+    "snap_threshold": 60
+  },
+  "whiteboard": {
+    "default_color": "#1F2937",
+    "default_pen_width": 4,
+    "default_eraser_width": 20,
+    "max_pages": 99,
+    "show_time": false,
+    "slogan": "123"
+  },
+  "markup": {
+    "default_color": "#E53935",
+    "default_width": 6
+  },
+  "schedule": {
+    "refresh_seconds": 30
+  },
+  "info": {
+    "refresh_seconds": 30,
+    "panel_width": 230
+  }
+}

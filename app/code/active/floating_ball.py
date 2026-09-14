@@ -3,8 +3,8 @@
 悬浮球组件
 应用的核心入口之一，启动时由 main.py 创建。支持：
 - 左键拖动移动，松手后靠近屏幕边缘自动吸附
-- 单击弹出功能选择条（白板 / 设置 / 关闭）
-- 长按进入设置界面
+- 单击弹出功能选择条（白板 / 退出）
+- 长按进入设置界面（唯一设置入口）
 同时负责管理白板、设置界面的创建与显示。
 本文件自包含运行所需的全部常量与工具函数。
 """
@@ -77,7 +77,7 @@ def available_screen_geometry(widget=None):
 
 
 class FunctionBar(QFrame):
-    """悬浮球的功能选择条：白板 / 设置 / 关闭，横向排列。"""
+    """悬浮球的功能选择条：白板 / 退出，横向排列。"""
 
     def __init__(self, owner, parent=None):
         super().__init__(parent)
@@ -91,7 +91,7 @@ class FunctionBar(QFrame):
 
         # 固定完整尺寸：确保首次弹出时读取的宽高准确，定位不偏移
         self.setFixedSize(
-            BAR_BUTTON_WIDTH * 3 + BAR_PADDING * 2 + 2,
+            BAR_BUTTON_WIDTH * 2 + BAR_PADDING * 2 + 2,
             BAR_BUTTON_HEIGHT + BAR_PADDING * 2,
         )
 
@@ -113,15 +113,10 @@ class FunctionBar(QFrame):
         self.btn_board = self._create_button("白板")
         self.btn_board.clicked.connect(self.owner.open_whiteboard)
 
-        self.btn_settings = self._create_button("设置")
-        self.btn_settings.clicked.connect(self.owner.open_settings)
-
-        self.btn_quit = self._create_button("关闭", quit_style=True)
+        self.btn_quit = self._create_button("退出", quit_style=True)
         self.btn_quit.clicked.connect(self.owner.quit)
 
         layout.addWidget(self.btn_board)
-        layout.addWidget(self._divider())
-        layout.addWidget(self.btn_settings)
         layout.addWidget(self._divider())
         layout.addWidget(self.btn_quit)
 

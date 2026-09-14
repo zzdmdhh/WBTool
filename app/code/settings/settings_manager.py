@@ -28,6 +28,7 @@ DEFAULT_SETTINGS = {
         "default_eraser_width": 20,    # 默认橡皮粗细
         "max_pages": 99,               # 最大页数
         "show_time": False,            # 打开白板时是否默认显示时间
+        "slogan": "",                  # 白板右上角标语（空表示不显示）
     },
     # 屏幕批注设置
     "markup": {
