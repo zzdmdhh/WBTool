@@ -18,14 +18,17 @@ WBTool/
     │   ├── info.json            # 信息显示数据（开发中功能使用）
     │   └── settings.json        # 设置数据（首次保存设置时生成）
     └── code/                    # 代码目录
-        ├── active/              # 正在使用的代码（当前发行版）
-        │   ├── floating_ball.py # 悬浮球（含功能选择条），管理白板/设置
-        │   └── whiteboard/      # 白板模块（模块化拆分）
-        │       ├── __init__.py      # 对外导出 Whiteboard / StrokeCanvas / BOARD_COLORS
-        │       ├── constants.py     # 色板、配色、尺寸常量与工具函数
-        │       ├── canvas.py        # StrokeCanvas 画布基类
-        │       ├── widgets.py       # ToolPopup 工具设置弹出框
-        │       └── whiteboard.py    # Whiteboard 主窗口
+        ├── floating_ball/       # 悬浮球模块
+        │   ├── __init__.py          # 对外导出 FloatingBall / FunctionBar
+        │   ├── constants.py         # 常量（路径、配色、尺寸）
+        │   ├── function_bar.py      # 功能选择条（白板/退出）
+        │   └── floating_ball.py     # 悬浮球主组件
+        ├── whiteboard/          # 白板模块
+        │   ├── __init__.py          # 对外导出 Whiteboard / StrokeCanvas / BOARD_COLORS
+        │   ├── constants.py         # 色板、配色、尺寸常量与工具函数
+        │   ├── canvas.py            # StrokeCanvas 画布基类
+        │   ├── widgets.py           # ToolPopup 工具设置弹出框
+        │   └── whiteboard.py        # Whiteboard 主窗口
         ├── settings/            # 设置模块（由原关于界面升级而来）
         │   ├── settings_dialog.py   # 设置对话框（侧边导航 + 页面堆栈）
         │   ├── settings_manager.py  # 设置读写（settings.json）
@@ -48,16 +51,16 @@ WBTool/
 python main.py
 ```
 
-仅运行 `app/code/active/` 下的发行版代码（悬浮球、白板）；`app/code/dev/` 下的开发中代码不参与运行。
+仅运行 `app/code/` 下 `floating_ball/`、`whiteboard/`、`settings/` 三个模块；`app/code/dev/` 下的开发中代码不参与运行。
 
 ## 当前版本功能说明
 
 - 悬浮球：左键拖动移动，松手后靠近屏幕边缘自动吸附
 - 单击悬浮球：弹出横向功能选择条（白板、退出）
 - 长按悬浮球（默认约 0.7 秒）：进入设置界面（唯一设置入口）
-- 白板：全屏白色画布，右上角标语，底部工具栏支持画笔/橡皮、颜色、粗细、清空、关闭；左上角时间显示
+- 白板：全屏白色画布，右上角标语（可设置内容与颜色），底部工具栏支持画笔/橡皮、颜色、粗细、清空、关闭；左上角时间显示
 - 设置界面：左侧分类导航，目前仅开放白板设置，其余设置项暂时置灰
-  - 白板设置：默认画笔颜色/粗细、默认橡皮粗细、最大页数、默认显示时间、右上角标语
+  - 白板设置：默认画笔颜色/粗细、默认橡皮粗细、最大页数、默认显示时间、右上角标语（内容 + 颜色）
   - 系统设置 / 屏幕批注 / 课程表 / 信息面板：暂未开放（后续版本）
   - 关于：应用信息、版本号与检查更新入口
 
@@ -68,7 +71,7 @@ python main.py
 由设置界面自动生成与管理，无需手动编辑；缺失的设置项自动回落到默认值。
 
 - `system`：悬浮球边长 `ball_size`、长按判定时间 `long_press_ms`（毫秒）、吸附阈值 `snap_threshold`（像素）
-- `whiteboard`：默认画笔颜色 `default_color`、默认画笔粗细 `default_pen_width`、默认橡皮粗细 `default_eraser_width`、最大页数 `max_pages`、默认显示时间 `show_time`、右上角标语 `slogan`（空则不显示）
+- `whiteboard`：默认画笔颜色 `default_color`、默认画笔粗细 `default_pen_width`、默认橡皮粗细 `default_eraser_width`、最大页数 `max_pages`、默认显示时间 `show_time`、右上角标语 `slogan`（空则不显示）、标语颜色 `slogan_color`
 - `markup`：默认画笔颜色 `default_color`、默认笔画粗细 `default_width`
 - `schedule`：刷新间隔 `refresh_seconds`（秒）
 - `info`：刷新间隔 `refresh_seconds`（秒）、面板宽度 `panel_width`（像素）

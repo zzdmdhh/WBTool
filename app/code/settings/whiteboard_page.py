@@ -112,6 +112,10 @@ class WhiteboardPage(QWidget):
         slogan_hint.setIndent(106)
         layout.addWidget(slogan_hint)
 
+        # 标语颜色
+        self.slogan_color_picker = ColorPicker(COLOR_PALETTE)
+        layout.addLayout(make_form_row("标语颜色", self.slogan_color_picker))
+
         layout.addStretch(1)
 
     # ---------- 数据读写 ----------
@@ -126,6 +130,9 @@ class WhiteboardPage(QWidget):
         self.max_pages_spin.setValue(int(values.get("max_pages", 99)))
         self.show_time_check.setChecked(bool(values.get("show_time", False)))
         self.slogan_edit.setText(str(values.get("slogan", "")))
+        self.slogan_color_picker.set_selected(
+            str(values.get("slogan_color", COLOR_TEXT_GRAY))
+        )
 
     def values(self):
         """从界面控件收集设置值。"""
@@ -136,4 +143,5 @@ class WhiteboardPage(QWidget):
             "max_pages": self.max_pages_spin.value(),
             "show_time": self.show_time_check.isChecked(),
             "slogan": self.slogan_edit.text().strip(),
+            "slogan_color": self.slogan_color_picker.value(),
         }

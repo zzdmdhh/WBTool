@@ -18,7 +18,7 @@ from PySide6.QtWidgets import (
     QVBoxLayout,
 )
 
-from app.code.active.whiteboard import BOARD_COLORS, StrokeCanvas
+from app.code.whiteboard import BOARD_COLORS, StrokeCanvas
 from app.code.settings.settings_manager import SettingsManager
 
 # 蓝白配色

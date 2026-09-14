@@ -29,6 +29,7 @@ DEFAULT_SETTINGS = {
         "max_pages": 99,               # 最大页数
         "show_time": False,            # 打开白板时是否默认显示时间
         "slogan": "",                  # 白板右上角标语（空表示不显示）
+        "slogan_color": "#7A8699",     # 白板右上角标语颜色
     },
     # 屏幕批注设置
     "markup": {

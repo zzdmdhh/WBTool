@@ -3,7 +3,7 @@
 白板模块 - 主窗口
 Whiteboard：全屏白色画布窗口，支持多页书写、翻页、保存与工具设置。
 顶部右侧可显示由设置指定的标语（白板设置 → 右上角标语）。
-可独立运行（python -m app.code.active.whiteboard.whiteboard），
+可独立运行（python -m app.code.whiteboard.whiteboard），
 也可由悬浮球菜单的"白板"按钮打开。
 """
 
@@ -132,10 +132,10 @@ class Whiteboard(StrokeCanvas):
         time_box.addWidget(self.date_label, 0, Qt.AlignLeft)
         time_box.addWidget(self.time_label, 0, Qt.AlignLeft)
 
-        # 右上角标语：内容由白板设置中的“右上角标语”决定，为空时不显示
+        # 右上角标语：内容与颜色由白板设置决定，为空时不显示（打开时由 _update_slogan 刷新）
         self.slogan_label = QLabel()
         self.slogan_label.setStyleSheet(
-            f"color: {COLOR_TEXT_GRAY}; font-size: 16px; font-weight: bold;"
+            f"color: {COLOR_TEXT_GRAY}; font-size: 24px; font-weight: bold;"
         )
         self.slogan_label.setVisible(False)
 
@@ -577,9 +577,14 @@ class Whiteboard(StrokeCanvas):
     # ---------- 右上角标语 ----------
 
     def _update_slogan(self):
-        """从设置读取右上角标语；标语为空时隐藏。"""
-        slogan = str(SettingsManager().get("whiteboard", "slogan", "")).strip()
+        """从设置读取右上角标语及其颜色；标语为空时隐藏。"""
+        wb_settings = SettingsManager().get("whiteboard")
+        slogan = str(wb_settings.get("slogan", "")).strip()
+        color = str(wb_settings.get("slogan_color", COLOR_TEXT_GRAY))
         self.slogan_label.setText(slogan)
+        self.slogan_label.setStyleSheet(
+            f"color: {color}; font-size: 24px; font-weight: bold;"
+        )
         self.slogan_label.setVisible(bool(slogan))
 
     # ---------- 页管理 ----------
@@ -739,7 +744,7 @@ class Whiteboard(StrokeCanvas):
 
 if __name__ == "__main__":
     # 独立运行入口：直接打开白板
-    # 运行方式：python -m app.code.active.whiteboard.whiteboard
+    # 运行方式：python -m app.code.whiteboard.whiteboard
     app = QApplication(sys.argv)
     board = Whiteboard()
     board.show()

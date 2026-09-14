@@ -10,7 +10,8 @@
     "default_eraser_width": 20,
     "max_pages": 99,
     "show_time": false,
-    "slogan": "123"
+    "slogan": "",
+    "slogan_color": "#7A8699"
   },
   "markup": {
     "default_color": "#E53935",

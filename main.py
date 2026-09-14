@@ -10,7 +10,7 @@ import sys
 from PySide6.QtCore import Qt
 from PySide6.QtWidgets import QApplication
 
-from app.code.active.floating_ball import FloatingBall
+from app.code.floating_ball import FloatingBall
 
 # 应用名称与版本号
 APP_NAME = "WBTool"

@@ -1,61 +1,31 @@
 # -*- coding: utf-8 -*-
 """
-悬浮球组件
-应用的核心入口之一，启动时由 main.py 创建。支持：
+悬浮球模块 - 主组件
+FloatingBall：应用的核心入口之一，启动时由 main.py 创建。支持：
 - 左键拖动移动，松手后靠近屏幕边缘自动吸附
 - 单击弹出功能选择条（白板 / 退出）
 - 长按进入设置界面（唯一设置入口）
 同时负责管理白板、设置界面的创建与显示。
-本文件自包含运行所需的全部常量与工具函数。
 """
 
-import os
-
-from PySide6.QtCore import QEvent, QPoint, Qt, QTimer
+from PySide6.QtCore import QPoint, Qt, QTimer
 from PySide6.QtGui import (
     QColor,
     QFont,
     QGuiApplication,
     QPainter,
     QPainterPath,
-    QPalette,
     QPen,
     QPixmap,
 )
-from PySide6.QtWidgets import (
-    QApplication,
-    QFrame,
-    QHBoxLayout,
-    QPushButton,
-    QWidget,
-)
+from PySide6.QtWidgets import QApplication, QWidget
 
-from app.code.active.whiteboard import Whiteboard
 from app.code.settings.settings_dialog import SettingsDialog
 from app.code.settings.settings_manager import SettingsManager
+from app.code.whiteboard import Whiteboard
 
-# ============ 文件路径 ============
-# 文件位于 app/code/active/ 下，上溯三级得到 app/ 根目录
-APP_ROOT = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
-# Logo 图片路径：将 logo.png 放入 app/assets/ 文件夹即可自动显示
-LOGO_PATH = os.path.join(APP_ROOT, "assets", "logo.png")
-
-# ============ 蓝白配色 ============
-COLOR_PRIMARY = "#2F6BFF"        # 主蓝色
-COLOR_LIGHT_BLUE = "#EAF1FF"     # 浅蓝背景（悬停/选中底）
-COLOR_BORDER = "#C9DAFF"         # 浅蓝边框
-COLOR_WHITE = "#FFFFFF"          # 白色
-COLOR_TEXT_DARK = "#22304A"      # 主文字深色
-
-# ============ 悬浮球 ============
-# 悬浮球大小、长按判定时间、吸附阈值从设置读取（见 system 设置段），
-# 此处仅保留拖动判定阈值常量。
-DRAG_THRESHOLD = 8               # 拖动判定阈值（像素）
-
-# ============ 功能选择条 ============
-BAR_BUTTON_HEIGHT = 40           # 功能按钮高度
-BAR_BUTTON_WIDTH = 100           # 功能按钮宽度
-BAR_PADDING = 8                  # 功能条内边距
+from .constants import COLOR_PRIMARY, COLOR_WHITE, DRAG_THRESHOLD, LOGO_PATH
+from .function_bar import FunctionBar
 
 
 def available_screen_geometry(widget=None):
@@ -74,131 +44,6 @@ def available_screen_geometry(widget=None):
             return screen.availableGeometry()
     # 兜底：使用主屏幕
     return QGuiApplication.primaryScreen().availableGeometry()
-
-
-class FunctionBar(QFrame):
-    """悬浮球的功能选择条：白板 / 退出，横向排列。"""
-
-    def __init__(self, owner, parent=None):
-        super().__init__(parent)
-        self.owner = owner  # 悬浮球实例
-
-        # 窗口属性：无边框、置顶、工具窗
-        self.setWindowFlags(
-            Qt.FramelessWindowHint | Qt.WindowStaysOnTopHint | Qt.Tool
-        )
-        self.setObjectName("bar")
-
-        # 固定完整尺寸：确保首次弹出时读取的宽高准确，定位不偏移
-        self.setFixedSize(
-            BAR_BUTTON_WIDTH * 2 + BAR_PADDING * 2 + 2,
-            BAR_BUTTON_HEIGHT + BAR_PADDING * 2,
-        )
-
-        # 不透明白色背景：圆角外的角落也保持白色
-        self.setAutoFillBackground(True)
-        palette = self.palette()
-        palette.setColor(QPalette.Window, QColor(COLOR_WHITE))
-        self.setPalette(palette)
-        self.setStyleSheet(self._style())
-
-        # 横向布局
-        layout = QHBoxLayout(self)
-        layout.setContentsMargins(
-            BAR_PADDING, BAR_PADDING,
-            BAR_PADDING, BAR_PADDING,
-        )
-        layout.setSpacing(0)
-
-        self.btn_board = self._create_button("白板")
-        self.btn_board.clicked.connect(self.owner.open_whiteboard)
-
-        self.btn_quit = self._create_button("退出", quit_style=True)
-        self.btn_quit.clicked.connect(self.owner.quit)
-
-        layout.addWidget(self.btn_board)
-        layout.addWidget(self._divider())
-        layout.addWidget(self.btn_quit)
-
-    # ---------- UI 构建 ----------
-
-    def _create_button(self, text, quit_style=False):
-        """创建功能按钮。"""
-        btn = QPushButton(text)
-        btn.setFixedSize(BAR_BUTTON_WIDTH, BAR_BUTTON_HEIGHT)
-        btn.setCursor(Qt.PointingHandCursor)
-        if quit_style:
-            btn.setObjectName("quit")
-        return btn
-
-    def _divider(self):
-        """创建竖直分隔线。"""
-        line = QFrame()
-        line.setObjectName("divider")
-        line.setFixedSize(1, BAR_BUTTON_HEIGHT - 12)
-        return line
-
-    def _style(self):
-        """功能条样式：白底蓝边圆角卡片。"""
-        return f"""
-        QFrame#bar {{
-            background: {COLOR_WHITE};
-            border: 1px solid {COLOR_BORDER};
-            border-radius: 10px;
-        }}
-        QFrame#divider {{
-            background: {COLOR_BORDER};
-            border: none;
-        }}
-        QPushButton {{
-            background: transparent;
-            border: none;
-            color: {COLOR_TEXT_DARK};
-            font-size: 14px;
-            font-family: "Microsoft YaHei UI";
-        }}
-        QPushButton:hover {{
-            background: {COLOR_LIGHT_BLUE};
-            color: {COLOR_PRIMARY};
-        }}
-        QPushButton:pressed {{
-            background: #D8E6FF;
-        }}
-        QPushButton#quit {{
-            color: #D64545;
-        }}
-        QPushButton#quit:hover {{
-            background: #FDECEC;
-            color: #C0392B;
-        }}
-        """
-
-    # ---------- 外部点击关闭 ----------
-
-    def showEvent(self, event):
-        """显示时安装全局事件过滤器。"""
-        QApplication.instance().installEventFilter(self)
-        super().showEvent(event)
-
-    def hideEvent(self, event):
-        """隐藏时移除全局事件过滤器。"""
-        QApplication.instance().removeEventFilter(self)
-        super().hideEvent(event)
-
-    def eventFilter(self, obj, event):
-        """点击功能条外部区域时自动关闭。"""
-        if event.type() == QEvent.MouseButtonPress:
-            pos = event.globalPosition().toPoint()
-            ball = self.owner
-            # 点击悬浮球：不在此关闭，由悬浮球自行切换菜单状态
-            if ball.frameGeometry().contains(pos):
-                return super().eventFilter(obj, event)
-            # 点击功能条内部：交由按钮处理
-            if self.frameGeometry().contains(pos):
-                return super().eventFilter(obj, event)
-            # 点击其他区域：关闭功能条
-            self.close()
-        return super().eventFilter(obj, event)
 
 
 class FloatingBall(QWidget):
