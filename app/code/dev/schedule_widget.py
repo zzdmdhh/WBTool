@@ -13,6 +13,8 @@ from PySide6.QtCore import QDate, QTime, QTimer, Qt
 from PySide6.QtGui import QGuiApplication
 from PySide6.QtWidgets import QFrame, QHBoxLayout, QLabel, QVBoxLayout, QWidget
 
+from app.code.settings.settings_manager import SettingsManager
+
 # ============ 文件路径 ============
 # 文件位于 app/code/dev/ 下，上溯三级得到 app/ 根目录
 APP_ROOT = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
@@ -25,9 +27,6 @@ COLOR_BORDER = "#C9DAFF"         # 浅蓝边框
 COLOR_WHITE = "#FFFFFF"          # 白色
 COLOR_TEXT_DARK = "#22304A"      # 主文字深色
 COLOR_TEXT_GRAY = "#7A8699"      # 次要文字灰色
-
-# ============ 课程表 ============
-SCHEDULE_REFRESH_MS = 30 * 1000  # 课程表刷新间隔（毫秒）
 
 
 def load_json(file_path, default=None):
@@ -105,9 +104,12 @@ class ScheduleWidget(QWidget):
         self._build_ui()
         self._move_to_corner()
 
-        # 定时刷新：课程内容与当前课程状态
+        # 定时刷新：刷新间隔由设置（schedule 段）决定，单位为秒
+        refresh_seconds = int(
+            SettingsManager().get("schedule", "refresh_seconds", 30)
+        )
         self._timer = QTimer(self)
-        self._timer.setInterval(SCHEDULE_REFRESH_MS)
+        self._timer.setInterval(max(5, refresh_seconds) * 1000)
         self._timer.timeout.connect(self._refresh)
         self._timer.start()
         self._refresh()

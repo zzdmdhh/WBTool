@@ -3,9 +3,9 @@
 悬浮球组件
 应用的核心入口之一，启动时由 main.py 创建。支持：
 - 左键拖动移动，松手后靠近屏幕边缘自动吸附
-- 单击弹出功能选择条（白板 / 关闭）
-- 长按进入关于界面
-同时负责管理白板、关于界面的创建与显示。
+- 单击弹出功能选择条（白板 / 设置 / 关闭）
+- 长按进入设置界面
+同时负责管理白板、设置界面的创建与显示。
 本文件自包含运行所需的全部常量与工具函数。
 """
 
@@ -30,8 +30,9 @@ from PySide6.QtWidgets import (
     QWidget,
 )
 
-from app.code.active.about_dialog import AboutDialog
 from app.code.active.whiteboard import Whiteboard
+from app.code.settings.settings_dialog import SettingsDialog
+from app.code.settings.settings_manager import SettingsManager
 
 # ============ 文件路径 ============
 # 文件位于 app/code/active/ 下，上溯三级得到 app/ 根目录
@@ -47,9 +48,8 @@ COLOR_WHITE = "#FFFFFF"          # 白色
 COLOR_TEXT_DARK = "#22304A"      # 主文字深色
 
 # ============ 悬浮球 ============
-BALL_SIZE = 56                   # 悬浮球边长
-SNAP_THRESHOLD = 60              # 边缘吸附判定阈值（像素）
-LONG_PRESS_MS = 700              # 长按判定时间（毫秒）
+# 悬浮球大小、长按判定时间、吸附阈值从设置读取（见 system 设置段），
+# 此处仅保留拖动判定阈值常量。
 DRAG_THRESHOLD = 8               # 拖动判定阈值（像素）
 
 # ============ 功能选择条 ============
@@ -77,7 +77,7 @@ def available_screen_geometry(widget=None):
 
 
 class FunctionBar(QFrame):
-    """悬浮球的功能选择条：白板 / 关闭，横向排列。"""
+    """悬浮球的功能选择条：白板 / 设置 / 关闭，横向排列。"""
 
     def __init__(self, owner, parent=None):
         super().__init__(parent)
@@ -91,7 +91,7 @@ class FunctionBar(QFrame):
 
         # 固定完整尺寸：确保首次弹出时读取的宽高准确，定位不偏移
         self.setFixedSize(
-            BAR_BUTTON_WIDTH * 2 + BAR_PADDING * 2 + 2,
+            BAR_BUTTON_WIDTH * 3 + BAR_PADDING * 2 + 2,
             BAR_BUTTON_HEIGHT + BAR_PADDING * 2,
         )
 
@@ -113,10 +113,15 @@ class FunctionBar(QFrame):
         self.btn_board = self._create_button("白板")
         self.btn_board.clicked.connect(self.owner.open_whiteboard)
 
+        self.btn_settings = self._create_button("设置")
+        self.btn_settings.clicked.connect(self.owner.open_settings)
+
         self.btn_quit = self._create_button("关闭", quit_style=True)
         self.btn_quit.clicked.connect(self.owner.quit)
 
         layout.addWidget(self.btn_board)
+        layout.addWidget(self._divider())
+        layout.addWidget(self.btn_settings)
         layout.addWidget(self._divider())
         layout.addWidget(self.btn_quit)
 
@@ -210,22 +215,28 @@ class FloatingBall(QWidget):
         # 由悬浮球管理的功能窗口实例
         self.whiteboard = None    # 白板实例
 
+        # 从设置读取系统相关参数（大小、长按时长、吸附阈值）
+        system = SettingsManager().get("system")
+        self.ball_size = int(system.get("ball_size", 56))
+        self.long_press_ms = int(system.get("long_press_ms", 700))
+        self.snap_threshold = int(system.get("snap_threshold", 60))
+
         # 窗口属性：无边框、始终置顶、工具窗（不占用任务栏）
         self.setWindowFlags(
             Qt.FramelessWindowHint | Qt.WindowStaysOnTopHint | Qt.Tool
         )
         self.setAttribute(Qt.WA_TranslucentBackground)  # 支持圆角透明外观
-        self.setFixedSize(BALL_SIZE, BALL_SIZE)
+        self.setFixedSize(self.ball_size, self.ball_size)
 
         self._dragging = False              # 是否正在拖动
         self._drag_offset = QPoint()        # 按下点相对窗口左上角的偏移
         self._pressed_pos = QPoint()        # 按下时的全局坐标
         self._long_press_triggered = False  # 长按是否已触发
 
-        # 长按定时器：按住超过阈值后进入关于界面
+        # 长按定时器：按住超过阈值后进入设置界面
         self._press_timer = QTimer(self)
         self._press_timer.setSingleShot(True)
-        self._press_timer.setInterval(LONG_PRESS_MS)
+        self._press_timer.setInterval(self.long_press_ms)
         self._press_timer.timeout.connect(self._on_long_press)
 
         # 功能选择条（懒加载，单击时才创建）
@@ -313,7 +324,7 @@ class FloatingBall(QWidget):
         if event.button() == Qt.LeftButton:
             self._press_timer.stop()
             if self._long_press_triggered:
-                # 长按已触发过（进入关于界面），释放时不再响应单击
+                # 长按已触发过（进入设置界面），释放时不再响应单击
                 self._long_press_triggered = False
             elif self._dragging:
                 # 拖动结束：执行边缘吸附
@@ -327,9 +338,9 @@ class FloatingBall(QWidget):
     # ---------- 长按与功能条 ----------
 
     def _on_long_press(self):
-        """长按定时器到期：标记长按并打开关于界面。"""
+        """长按定时器到期：标记长按并打开设置界面。"""
         self._long_press_triggered = True
-        self.open_about()
+        self.open_settings()
 
     def _toggle_function_bar(self):
         """切换功能选择条的显示/隐藏。"""
@@ -357,9 +368,28 @@ class FloatingBall(QWidget):
         if not self.whiteboard.isVisible():
             self.whiteboard.show()
 
-    def open_about(self):
-        """打开关于界面（模态对话框）。"""
-        AboutDialog().exec()
+    def open_settings(self):
+        """打开设置界面（模态对话框），关闭后应用可能变化的系统设置。"""
+        SettingsDialog().exec()
+        self._apply_system_settings()
+
+    def _apply_system_settings(self):
+        """重新读取系统设置并应用到悬浮球（大小、长按时长、吸附阈值）。"""
+        system = SettingsManager().get("system")
+        ball_size = int(system.get("ball_size", 56))
+        long_press_ms = int(system.get("long_press_ms", 700))
+        snap_threshold = int(system.get("snap_threshold", 60))
+
+        if ball_size != self.ball_size:
+            self.ball_size = ball_size
+            self.setFixedSize(ball_size, ball_size)
+            self.update()
+            self._init_position()
+        if long_press_ms != self.long_press_ms:
+            self.long_press_ms = long_press_ms
+            self._press_timer.setInterval(long_press_ms)
+        if snap_threshold != self.snap_threshold:
+            self.snap_threshold = snap_threshold
 
     def quit(self):
         """退出应用。"""
@@ -378,7 +408,7 @@ class FloatingBall(QWidget):
         """检测窗口是否贴近屏幕边缘，若是则吸附到边缘。"""
         screen = available_screen_geometry(self)
         x, y = self.x(), self.y()
-        threshold = SNAP_THRESHOLD
+        threshold = self.snap_threshold
 
         if x <= screen.left() + threshold:
             x = screen.left()

@@ -19,6 +19,7 @@ from PySide6.QtWidgets import (
 )
 
 from app.code.active.whiteboard import BOARD_COLORS, StrokeCanvas
+from app.code.settings.settings_manager import SettingsManager
 
 # 蓝白配色
 COLOR_PRIMARY = "#2F6BFF"        # 主蓝色
@@ -225,9 +226,10 @@ class ScreenMarkup(StrokeCanvas):
         self.setAttribute(Qt.WA_TranslucentBackground)
         self.setFocusPolicy(Qt.ClickFocus)
         self.setCursor(Qt.CrossCursor)
-        # 批注默认使用醒目的红色、更粗的笔触
-        self.color = BOARD_COLORS[1]
-        self.width = 6
+        # 从设置读取批注默认参数（默认红色、较粗笔触）
+        markup_settings = SettingsManager().get("markup")
+        self.color = str(markup_settings.get("default_color", BOARD_COLORS[1]))
+        self.width = int(markup_settings.get("default_width", 6))
         self.setGeometry(QGuiApplication.primaryScreen().geometry())
 
         # 独立置顶的工具栏窗口

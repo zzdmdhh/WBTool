@@ -45,6 +45,8 @@ from PySide6.QtWidgets import (
     QWidget,
 )
 
+from app.code.settings.settings_manager import SettingsManager
+
 # ============ 画笔色板 ============
 # 画笔可选颜色（黑、红、蓝、绿、橙、紫、粉、青），白板与屏幕批注共用
 BOARD_COLORS = [
@@ -391,14 +393,24 @@ class Whiteboard(StrokeCanvas):
         self.pages = [self.canvas]
         self.current_page_index = 0
 
-        # 画笔与橡皮各自的笔触宽度（切换工具时决定实际使用的宽度）
-        self.pen_width = PEN_WIDTH
-        self.eraser_width = ERASER_WIDTH
+        # 从设置读取默认工具参数（画笔颜色/粗细、橡皮粗细、最大页数、默认显示时间）
+        wb_settings = SettingsManager().get("whiteboard")
+        self.pen_width = int(wb_settings.get("default_pen_width", PEN_WIDTH))
+        self.eraser_width = int(wb_settings.get("default_eraser_width", ERASER_WIDTH))
+        self.color = str(wb_settings.get("default_color", BOARD_COLORS[0]))
+        self.width = self.pen_width
+        self.max_pages = int(wb_settings.get("max_pages", MAX_PAGES))
+        self._default_show_time = bool(wb_settings.get("show_time", False))
 
         # 白板内部提示卡片（替代系统弹窗），首次使用时创建
         self._notice_overlay = None
 
         self._build_ui()
+
+        # 按设置决定是否默认显示左上角时间
+        if self._default_show_time:
+            self.btn_time.setChecked(True)
+            self._toggle_time(True)
 
     # ---------- 窗口事件 ----------
 
@@ -889,9 +901,9 @@ class Whiteboard(StrokeCanvas):
     # ---------- 页管理 ----------
 
     def _add_page(self):
-        """新建一张空白页并切换到新页（最多 99 页）。"""
-        if len(self.pages) >= MAX_PAGES:
-            self._show_notice(f"已达最大页数 {MAX_PAGES} 页")
+        """新建一张空白页并切换到新页（最多 max_pages 页）。"""
+        if len(self.pages) >= self.max_pages:
+            self._show_notice(f"已达最大页数 {self.max_pages} 页")
             return
         new_canvas = QPixmap(self.size())
         new_canvas.fill(self.background)

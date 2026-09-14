@@ -13,6 +13,8 @@ from PySide6.QtCore import QDateTime, QTimer, Qt
 from PySide6.QtGui import QGuiApplication
 from PySide6.QtWidgets import QFrame, QHBoxLayout, QLabel, QVBoxLayout, QWidget
 
+from app.code.settings.settings_manager import SettingsManager
+
 # ============ 文件路径 ============
 # 文件位于 app/code/dev/ 下，上溯三级得到 app/ 根目录
 APP_ROOT = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
@@ -23,10 +25,6 @@ COLOR_PRIMARY = "#2F6BFF"        # 主蓝色
 COLOR_BORDER = "#C9DAFF"         # 浅蓝边框
 COLOR_TEXT_DARK = "#22304A"      # 主文字深色
 COLOR_TEXT_GRAY = "#7A8699"      # 次要文字灰色
-
-# ============ 信息面板 ============
-INFO_WIDTH = 230                 # 信息面板宽度
-INFO_REFRESH_MS = 30 * 1000      # 信息面板刷新间隔（毫秒）
 
 
 def load_json(file_path, default=None):
@@ -95,19 +93,24 @@ class InfoPanel(QWidget):
         super().__init__(parent)
         self.data = {}  # 信息数据（来自 info.json）
 
+        # 从设置读取面板宽度与刷新间隔（info 段）
+        info_settings = SettingsManager().get("info")
+        panel_width = int(info_settings.get("panel_width", 230))
+        refresh_seconds = int(info_settings.get("refresh_seconds", 30))
+
         # 窗口属性：无边框、置顶、工具窗
         self.setWindowFlags(
             Qt.FramelessWindowHint | Qt.WindowStaysOnTopHint | Qt.Tool
         )
         self.setAttribute(Qt.WA_TranslucentBackground)
-        self.setFixedWidth(INFO_WIDTH)
+        self.setFixedWidth(panel_width)
 
         self._build_ui()
         self._move_to_corner()
 
-        # 定时刷新：信息内容与动态时间
+        # 定时刷新：刷新间隔由设置决定，单位为秒
         self._timer = QTimer(self)
-        self._timer.setInterval(INFO_REFRESH_MS)
+        self._timer.setInterval(max(5, refresh_seconds) * 1000)
         self._timer.timeout.connect(self._refresh)
         self._timer.start()
         self._refresh()

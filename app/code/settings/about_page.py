@@ -1,18 +1,17 @@
 # -*- coding: utf-8 -*-
 """
-关于界面
-展示应用 Logo、名称、版本、简介与开源信息，支持检查更新，可拖动移动。
-本文件自包含运行所需的全部常量与工具函数。
+关于页面
+展示应用 Logo、名称、版本、简介与开源信息，支持检查更新。
+由原 about_dialog.py 升级而来，作为设置模块中的一个页面。
 """
 
 import json
 import os
 
-from PySide6.QtCore import QPoint, Qt, QUrl
+from PySide6.QtCore import Qt, QUrl
 from PySide6.QtGui import (
     QColor,
     QDesktopServices,
-    QGuiApplication,
     QPainter,
     QPainterPath,
     QPixmap,
@@ -23,35 +22,34 @@ from PySide6.QtNetwork import (
     QNetworkRequest,
 )
 from PySide6.QtWidgets import (
-    QDialog,
     QFrame,
-    QGraphicsDropShadowEffect,
     QHBoxLayout,
     QLabel,
     QMessageBox,
     QPushButton,
     QVBoxLayout,
+    QWidget,
+)
+
+from app.code.settings.common import (
+    COLOR_BORDER,
+    COLOR_LIGHT_BLUE,
+    COLOR_PRIMARY,
+    COLOR_PRIMARY_DARK,
+    COLOR_TEXT_DARK,
+    COLOR_WHITE,
 )
 
 # ============ 文件路径 ============
-# 文件位于 app/code/active/ 下，上溯三级得到 app/ 根目录
+# 文件位于 app/code/settings/ 下，上溯三级得到 app/ 根目录
 APP_ROOT = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 # Logo 图片路径：将 logo.png 放入 app/assets/ 文件夹即可自动显示
 LOGO_PATH = os.path.join(APP_ROOT, "assets", "logo.png")
 
-# ============ 蓝白配色 ============
-COLOR_PRIMARY = "#2F6BFF"        # 主蓝色
-COLOR_PRIMARY_DARK = "#1E50CC"   # 主蓝加深（按下效果）
-COLOR_LIGHT_BLUE = "#EAF1FF"     # 浅蓝背景（悬停/选中底）
-COLOR_BORDER = "#C9DAFF"         # 浅蓝边框
-COLOR_WHITE = "#FFFFFF"          # 白色
-COLOR_TEXT_DARK = "#22304A"      # 主文字深色
-COLOR_TEXT_GRAY = "#7A8699"      # 次要文字灰色
-
 # ============ 应用信息 ============
 APP_NAME = "WBTool"
-APP_STAGE = "Release"            # 发布阶段：Alpha / Beta / Release
-APP_VERSION = "1.0.0"          # 版本号（发行版）
+APP_STAGE = "Alpha"            # 发布阶段：Alpha / Beta / Release
+APP_VERSION = "1.0.1.100"          # 版本号（发行版）
 APP_DESC = "多功能智慧大屏管理系统"
 # 开源仓库地址（留空则不显示仓库链接行）：填入后，关于界面自动将其显示为可点击的链接
 APP_REPO_URL = ""
@@ -79,41 +77,22 @@ def _rounded_pixmap(pixmap, size, radius):
     return rounded
 
 
-class AboutDialog(QDialog):
-    """关于 WBTool 的对话框。"""
+class AboutPage(QWidget):
+    """关于页面：顶部横幅 + 正文信息 + 检查更新。"""
 
     def __init__(self, parent=None):
         super().__init__(parent)
-        self._drag_offset = QPoint()    # 拖动偏移
-        self._manager = None            # 更新请求管理器
-        self._reply = None              # 进行中的更新请求
-        self._btn_update = None         # “检查更新”按钮
-
-        # 无边框、置顶对话框
-        self.setWindowFlags(Qt.FramelessWindowHint | Qt.Dialog)
-        self.setAttribute(Qt.WA_TranslucentBackground)
-        self.setFixedSize(480, 540)
+        self._manager = None    # 更新请求管理器
+        self._reply = None      # 进行中的更新请求
+        self._btn_update = None  # “检查更新”按钮
 
         self._build_ui()
-        self._center()
 
     # ---------- UI 构建 ----------
 
     def _build_ui(self):
         """构建关于卡片内容。"""
-        card = QFrame(self)
-        card.setObjectName("card")
-        card.setStyleSheet(self._style())
-        card.setGeometry(10, 10, self.width() - 20, self.height() - 20)
-
-        # 卡片投影，提升层次感
-        shadow = QGraphicsDropShadowEffect(self)
-        shadow.setBlurRadius(36)
-        shadow.setOffset(0, 8)
-        shadow.setColor(QColor(20, 40, 90, 70))
-        card.setGraphicsEffect(shadow)
-
-        layout = QVBoxLayout(card)
+        layout = QVBoxLayout(self)
         layout.setContentsMargins(0, 0, 0, 0)
         layout.setSpacing(0)
         layout.addWidget(self._build_banner())
@@ -123,10 +102,11 @@ class AboutDialog(QDialog):
         """顶部渐变横幅：Logo + 名称 + 简介 + 版本徽标。"""
         banner = QFrame()
         banner.setObjectName("banner")
-        banner.setFixedHeight(140)
+        banner.setFixedHeight(128)
+        banner.setStyleSheet(self._style())
 
         h = QHBoxLayout(banner)
-        h.setContentsMargins(30, 22, 30, 22)
+        h.setContentsMargins(30, 20, 30, 20)
         h.setSpacing(18)
 
         # Logo（存在 assets/logo.png 时显示图片，否则显示 W 占位）
@@ -204,42 +184,29 @@ class AboutDialog(QDialog):
 
         layout.addStretch(1)
 
-        # 底部按钮：检查更新（主按钮）+ 关闭
+        # 底部按钮：检查更新（主按钮）
         buttons = QHBoxLayout()
         buttons.setSpacing(12)
         self._btn_update = QPushButton("检查更新")
         self._btn_update.setObjectName("primary")
         self._btn_update.setCursor(Qt.PointingHandCursor)
-        self._btn_update.setEnabled(False)  # 检查更新功能暂不可用
         self._btn_update.clicked.connect(self.check_update)
-        btn_close = QPushButton("关闭")
-        btn_close.setCursor(Qt.PointingHandCursor)
-        btn_close.clicked.connect(self.accept)
         buttons.addStretch(1)
         buttons.addWidget(self._btn_update)
-        buttons.addWidget(btn_close)
         buttons.addStretch(1)
         layout.addLayout(buttons)
 
         return body
 
     def _style(self):
-        """卡片样式：白底圆角卡片 + 顶部蓝色渐变横幅。"""
+        """关于页样式：顶部蓝色渐变横幅。"""
         return f"""
-        QFrame#card {{
-            background: {COLOR_WHITE};
-            border-radius: 20px;
-        }}
         QFrame#banner {{
             background: qlineargradient(x1:0, y1:0, x2:1, y2:1,
                 stop:0 {COLOR_PRIMARY}, stop:1 #5B93FF);
-            border-top-left-radius: 20px;
-            border-top-right-radius: 20px;
         }}
         QFrame#body {{
             background: {COLOR_WHITE};
-            border-bottom-left-radius: 20px;
-            border-bottom-right-radius: 20px;
         }}
         QPushButton {{
             background: {COLOR_WHITE};
@@ -295,7 +262,7 @@ class AboutDialog(QDialog):
             QMessageBox.information(
                 self, "检查更新",
                 "更新服务器地址尚未配置。\n"
-                "请在 about_dialog.py 中填写 UPDATE_URL 后重试。",
+                "请在 app/code/settings/about_page.py 中填写 UPDATE_URL 后重试。",
             )
             return
 
@@ -362,42 +329,12 @@ class AboutDialog(QDialog):
     @staticmethod
     def _compare_version(a, b):
         """比较两个版本号，返回 a>b:1、a<b:-1、相等:0。"""
+
         def parts(v):
             return [int(p) for p in str(v).split(".") if p.isdigit()]
+
         pa, pb = parts(a), parts(b)
         for x, y in zip(pa, pb):
             if x != y:
                 return 1 if x > y else -1
         return 0
-
-    # ---------- 定位与拖动 ----------
-
-    def _center(self):
-        """将窗口居中显示。"""
-        screen = QGuiApplication.primaryScreen().availableGeometry()
-        self.move(screen.center() - self.rect().center())
-
-    def mousePressEvent(self, event):
-        """按下：记录拖动偏移。"""
-        if event.button() == Qt.LeftButton:
-            self._drag_offset = (
-                event.globalPosition().toPoint() - self.frameGeometry().topLeft()
-            )
-        super().mousePressEvent(event)
-
-    def mouseMoveEvent(self, event):
-        """移动：拖动窗口。"""
-        if event.buttons() & Qt.LeftButton:
-            self.move(event.globalPosition().toPoint() - self._drag_offset)
-        super().mouseMoveEvent(event)
-
-    def closeEvent(self, event):
-        """关闭时中止未完成的更新请求，避免回调访问已销毁控件。"""
-        reply = self._reply
-        if reply is not None and reply.isRunning():
-            try:
-                reply.finished.disconnect(self._on_update_finished)
-            except RuntimeError:
-                pass
-            reply.abort()
-        super().closeEvent(event)
